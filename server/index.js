@@ -305,6 +305,16 @@ const detectCategory = (product) => {
   return 'outros';
 };
 
+app.get('/api/site-config', (req, res) => {
+  const sc = loadConfig().siteConfig || {};
+  res.json({
+    siteName:       sc.siteName       || "DAMA'S SECRETA",
+    whatsappNumber: sc.whatsappNumber || '5521988631029',
+    instagramUrl:   sc.instagramUrl   || 'https://www.instagram.com/luar.seducao/',
+    logoUrl:        sc.logoUrl        || ''
+  });
+});
+
 app.get('/api/products', (req, res) => {
   const products = loadProducts();
   const { category, model, color, minPrice, maxPrice, condition, searchQuery, name } = req.query;

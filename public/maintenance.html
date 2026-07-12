@@ -25,6 +25,7 @@
   <p>Voltaremos em breve. Agradecemos sua paciência!</p>
   <div class="badge">Voltamos logo • <span id="time"></span></div>
 </div>
+<script src="/js/site-config.js"></script>
 <script>
   const el = document.getElementById('time');
   setInterval(() => { el.textContent = new Date().toLocaleTimeString('pt-BR'); }, 1000);

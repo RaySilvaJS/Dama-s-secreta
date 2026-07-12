@@ -801,6 +801,29 @@ router.post('/pix-config', adminAuth, (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── SITE CONFIG (marca: nome, WhatsApp, Instagram, logo) ───────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+router.get('/site-config', adminAuth, (req, res) => {
+  const cfg = loadConfig();
+  res.json(cfg.siteConfig || {});
+});
+
+router.post('/site-config', adminAuth, (req, res) => {
+  const { siteName, whatsappNumber, instagramUrl, logoUrl } = req.body;
+  const cfg = loadConfig();
+  cfg.siteConfig = {
+    siteName:       (siteName       || "DAMA'S SECRETA").trim(),
+    whatsappNumber: (whatsappNumber || '').replace(/\D/g, ''),
+    instagramUrl:   (instagramUrl   || '').trim(),
+    logoUrl:        (logoUrl        || '').trim()
+  };
+  saveConfig(cfg);
+  audit.append('site_config_updated', req.adminUser?.email || 'devops', req.ip, { siteName: cfg.siteConfig.siteName });
+  res.json({ ok: true, siteConfig: cfg.siteConfig });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // ── DASHBOARD FINANCEIRO ────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 

@@ -854,6 +854,38 @@ tbody tr:last-child td { border-bottom: none; }
           <div id="settings-info" class="wa-info-grid"></div>
         </div>
       </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <h3>🎨 Identidade Visual do Site</h3>
+        <div style="display:grid;gap:10px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Nome do Site</label>
+            <input id="brand-name" class="input" style="width:100%" placeholder="DAMA'S SECRETA"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Número WhatsApp (DDI+DDD+número, só dígitos)</label>
+            <input id="brand-whatsapp" class="input" style="width:100%" placeholder="5521988631029"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Link do Instagram</label>
+            <input id="brand-instagram" class="input" style="width:100%" placeholder="https://www.instagram.com/seu.perfil/"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Logo (imagem)</label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <div id="brand-logo-preview" style="font-size:12px;color:var(--muted)">Nenhuma logo enviada — usando texto.</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <input type="file" id="brand-logo-input" accept="image/*" style="display:none" onchange="uploadBrandLogo(this)"/>
+              <button class="btn btn-ghost" onclick="document.getElementById('brand-logo-input').click()">📤 Enviar Logo</button>
+              <button class="btn btn-ghost" onclick="removeBrandLogo()">🗑️ Remover Logo</button>
+            </div>
+          </div>
+          <button class="btn btn-blue" onclick="saveSiteBrand()">💾 Salvar Configurações do Site</button>
+          <div id="brand-feedback" style="font-size:12px;color:var(--green);display:none;"></div>
+        </div>
+      </div>
+
       <div class="card">
         <h3>Gerenciar Usuários</h3>
         <div class="table-wrap">
@@ -2833,6 +2865,7 @@ async function loadSettings() {
     api.get('/api/admin/system/info'),
     api.get('/api/admin/users')
   ]);
+  loadSiteBrandForm();
 
   if (maint) {
     const tog = document.getElementById('maintenance-toggle');
@@ -5126,6 +5159,70 @@ async function savePixCfg() {
     if (fb) {
       fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
       fb.textContent  = r?.ok ? '✓ Configuração salva!' : (r?.error || 'Erro ao salvar.');
+      fb.style.display = '';
+      setTimeout(() => { if (fb) fb.style.display = 'none'; }, 3000);
+    }
+  } catch(e) {
+    if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
+  }
+}
+
+// ── Identidade Visual do Site ────────────────────────────────────────────────
+let pendingLogoUrl = '';
+
+function renderBrandLogoPreview(logoUrl) {
+  const box = document.getElementById('brand-logo-preview');
+  if (!box) return;
+  box.innerHTML = logoUrl
+    ? `<img src="${logoUrl}" alt="logo" style="height:32px;max-width:160px;object-fit:contain;border-radius:4px;border:1px solid var(--border)"/>`
+    : 'Nenhuma logo enviada — usando texto.';
+}
+
+async function loadSiteBrandForm() {
+  try {
+    const cfg = await api.get('/api/admin/site-config');
+    if (!cfg) return;
+    pendingLogoUrl = cfg.logoUrl || '';
+    const nameEl = document.getElementById('brand-name');
+    const waEl   = document.getElementById('brand-whatsapp');
+    const igEl   = document.getElementById('brand-instagram');
+    if (nameEl) nameEl.value = cfg.siteName || '';
+    if (waEl)   waEl.value   = cfg.whatsappNumber || '';
+    if (igEl)   igEl.value   = cfg.instagramUrl || '';
+    renderBrandLogoPreview(pendingLogoUrl);
+  } catch {}
+}
+
+async function uploadBrandLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const dataUrl = e.target.result;
+    const r = await api.post('/api/admin/upload', { dataUrl, filename: file.name });
+    if (r?.success) { pendingLogoUrl = r.url; renderBrandLogoPreview(pendingLogoUrl); }
+    else alert('Erro: ' + (r?.error || 'Falha no upload da logo.'));
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function removeBrandLogo() {
+  pendingLogoUrl = '';
+  renderBrandLogoPreview('');
+}
+
+async function saveSiteBrand() {
+  const siteName       = document.getElementById('brand-name')?.value.trim();
+  const whatsappNumber = document.getElementById('brand-whatsapp')?.value.trim();
+  const instagramUrl   = document.getElementById('brand-instagram')?.value.trim();
+  const fb             = document.getElementById('brand-feedback');
+
+  try {
+    const r = await api.post('/api/admin/site-config', { siteName, whatsappNumber, instagramUrl, logoUrl: pendingLogoUrl });
+    if (fb) {
+      fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
+      fb.textContent  = r?.ok ? '✓ Configurações salvas!' : (r?.error || 'Erro ao salvar.');
       fb.style.display = '';
       setTimeout(() => { if (fb) fb.style.display = 'none'; }, 3000);
     }
