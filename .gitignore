@@ -1,0 +1,32 @@
+# Dependências do Node
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+server/logs/
+server/data/catalogs/
+
+# Arquivos de build
+dist/
+build/
+
+# Variáveis de ambiente
+.env
+
+# Sessão do WhatsApp — NÃO commitar, NÃO apagar no deploy
+# Se estes arquivos sumirem, o bot precisará escanear QR Code novamente.
+server/auth_info/*
+!server/auth_info/.gitkeep
+
+# Dados de runtime — gerados pelo servidor, NÃO commitar
+# (usuários, pedidos, cupons, comprovantes — dados sensíveis e dinâmicos)
+server/data/*.json
+server/data/proofs/
+server/data/analytics/
+server/data/backups/
+
+# Sistema
+.DS_Store
+Thumbs.db

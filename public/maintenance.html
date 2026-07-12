@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Em Manutenção — LUAR SEDUÇÃO</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #f0e8ed; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 0; }
+  .brand { font-family: Georgia, serif; font-size: 22px; font-weight: 700; color: #E8518A; letter-spacing: .06em; margin-bottom: 36px; }
+  .brand span { color: rgba(255,255,255,.5); }
+  .card { text-align: center; padding: 48px 40px; max-width: 480px; }
+  .icon { font-size: 60px; margin-bottom: 24px; display: inline-block; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 16px; color: #f0e8ed; }
+  p { color: #B08EA0; line-height: 1.6; font-size: 16px; margin-bottom: 12px; }
+  .badge { display: inline-block; background: rgba(232,81,138,.1); border: 1px solid rgba(232,81,138,.25); border-radius: 100px; padding: 6px 16px; font-size: 13px; color: #E8518A; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="brand">LUAR <span>·</span> SEDUÇÃO</div>
+<div class="card">
+  <div class="icon">🌙</div>
+  <h1>Site em Manutenção</h1>
+  <p>Estamos realizando melhorias para oferecer uma experiência ainda melhor.</p>
+  <p>Voltaremos em breve. Agradecemos sua paciência!</p>
+  <div class="badge">Voltamos logo • <span id="time"></span></div>
+</div>
+<script>
+  const el = document.getElementById('time');
+  setInterval(() => { el.textContent = new Date().toLocaleTimeString('pt-BR'); }, 1000);
+  el.textContent = new Date().toLocaleTimeString('pt-BR');
+</script>
+</body>
+</html>

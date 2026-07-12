@@ -1,0 +1,698 @@
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, Browsers, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const path   = require('path');
+const fs     = require('fs');
+
+const paymentsPath   = path.join(__dirname, 'data', 'payments.json');
+const WA_EVENTS_PATH = path.join(__dirname, 'data', 'wa-events.json');
+const WHATSAPP_GROUP_ID = process.env.WHATSAPP_GROUP_ID;
+
+const getTracker = () => { try { return require('./tracker'); } catch { return null; } };
+const getAlerts  = () => { try { return require('./alerts');  } catch { return null; } };
+
+const loadPayments  = () => { try { return JSON.parse(fs.readFileSync(paymentsPath, 'utf-8')); } catch { return []; } };
+const loadWaEvents  = () => { try { return JSON.parse(fs.readFileSync(WA_EVENTS_PATH, 'utf-8')); } catch { return []; } };
+
+const appendWaEvent = (type, detail = '') => {
+  try {
+    const events = loadWaEvents();
+    events.unshift({ type, detail, ts: new Date().toISOString() });
+    fs.writeFileSync(WA_EVENTS_PATH, JSON.stringify(events.slice(0, 1000), null, 2), 'utf-8');
+  } catch (e) { console.error('[WA] Erro ao gravar evento:', e.message); }
+};
+const savePayments = (p) => fs.writeFileSync(paymentsPath, JSON.stringify(p, null, 2), 'utf-8');
+const formatBRL    = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const addLog = (payment, entry) => {
+  payment.logs = payment.logs || [];
+  payment.logs.push({ ...entry, timestamp: new Date().toISOString() });
+};
+
+// ── Estado persistente ────────────────────────────────────────────────────────
+const state = {
+  status: 'disconnected',
+  qr: null, qrAt: null, lastQrScannedAt: null,
+  phone: null, name: null, connectedAt: null, lastSeen: null,
+  reconnects: 0, disconnects: 0, lastError: null, lastDisconnectReason: null,
+  startedAt: new Date().toISOString()
+};
+
+let _reconnectTimer  = null;
+let _isInitializing  = false;
+let _reconnectDelay  = 5000;
+const authInfoPath   = path.join(__dirname, 'auth_info');
+let socketInstance   = null;
+let _lastSaveCreds   = Promise.resolve(); // rastreia o último saveCreds em andamento
+
+// ── Converte telefone brasileiro para JID do WhatsApp (E.164 com DDI 55) ─────
+// O banco armazena apenas DDD+número (10-11 dígitos). O JID exige DDI 55.
+// Sem DDI: 11937791251@s.whatsapp.net → número inválido, mensagem não chega.
+// Com DDI: 5511937791251@s.whatsapp.net → correto.
+const toWAJid = (phone) => {
+  if (!phone) return null;
+  let digits = String(phone).replace(/\D/g, '');
+  // Se não começa com 55 (DDI Brasil) e tem 10-11 dígitos, adiciona o DDI
+  if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
+    digits = '55' + digits;
+  }
+  // Valida: número brasileiro com DDI deve ter 12 (fixo) ou 13 (celular com 9) dígitos
+  if (digits.length < 12 || digits.length > 13) {
+    console.warn(`[WA] Número inválido após normalização: "${phone}" → "${digits}"`);
+    return null;
+  }
+  return `${digits}@s.whatsapp.net`;
+};
+
+// ── Formata número para exibição ──────────────────────────────────────────────
+const formatPhoneDisplay = (phone) => {
+  if (!phone) return 'Não informado';
+  const d = String(phone).replace(/\D/g, '');
+  const n = d.startsWith('55') ? d.slice(2) : d;
+  if (n.length === 11) return `(${n.slice(0,2)}) ${n.slice(2,7)}-${n.slice(7)}`;
+  if (n.length === 10) return `(${n.slice(0,2)}) ${n.slice(2,6)}-${n.slice(6)}`;
+  return d;
+};
+
+// ── Formata CPF para exibição ─────────────────────────────────────────────────
+const formatCpfDisplay = (cpf) => {
+  if (!cpf) return 'Não informado';
+  const d = String(cpf).replace(/\D/g, '');
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+};
+
+// ── Envia mensagem diretamente para o cliente (usado pelo painel admin) ───────
+const sendToClient = async (clientPhone, text) => {
+  if (!socketInstance || !clientPhone) return false;
+  const jid = toWAJid(clientPhone);
+  if (!jid) { console.error('[WA] sendToClient: número inválido:', clientPhone); return false; }
+  try {
+    await socketInstance.sendMessage(jid, { text });
+    return true;
+  } catch (e) {
+    console.error('[WA] Erro ao enviar para cliente:', e.message);
+    return false;
+  }
+};
+
+// ── Core init ─────────────────────────────────────────────────────────────────
+const initWhatsApp = async () => {
+  if (_isInitializing) {
+    console.log('[WA] Inicialização já em andamento, ignorando chamada duplicada.');
+    return;
+  }
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+
+  if (socketInstance) {
+    const old = socketInstance;
+    socketInstance = null;
+    try { old.end(); } catch {}
+  }
+
+  _isInitializing = true;
+  state.status = 'connecting';
+  state.qr     = null;
+  appendWaEvent('init', 'Inicialização do bot iniciada');
+
+  if (!fs.existsSync(authInfoPath)) fs.mkdirSync(authInfoPath, { recursive: true });
+
+  // Tenta restaurar creds.json a partir do backup se o arquivo principal estiver corrompido
+  // (pode acontecer se o processo for morto no meio de um saveCreds durante o deploy)
+  const credsPath    = path.join(authInfoPath, 'creds.json');
+  const credsBakPath = path.join(authInfoPath, 'creds.json.bak');
+  if (fs.existsSync(credsPath)) {
+    try { JSON.parse(fs.readFileSync(credsPath, 'utf-8')); }
+    catch {
+      console.warn('[WA] creds.json corrompido — tentando restaurar do backup...');
+      appendWaEvent('error', 'creds.json corrompido detectado — tentando restaurar do backup');
+      if (fs.existsSync(credsBakPath)) {
+        try {
+          fs.copyFileSync(credsBakPath, credsPath);
+          console.log('[WA] Backup restaurado com sucesso.');
+          appendWaEvent('init', 'creds.json restaurado do backup com sucesso');
+        } catch (restoreErr) {
+          console.error('[WA] Falha ao restaurar backup:', restoreErr.message);
+          fs.unlinkSync(credsPath); // remove o corrompido para gerar novo QR
+        }
+      } else {
+        console.warn('[WA] Sem backup disponível — sessão será reiniciada com novo QR.');
+        fs.unlinkSync(credsPath);
+      }
+    }
+  }
+
+  const pino = require('pino');
+  let authState, saveCreds;
+  try {
+    ({ state: authState, saveCreds } = await useMultiFileAuthState(authInfoPath));
+  } catch (e) {
+    console.error('[WA] Falha ao carregar auth state:', e.message);
+    appendWaEvent('error', 'Falha ao carregar auth state: ' + e.message);
+    state.lastError = e.message;
+    _isInitializing = false;
+    const delay = _reconnectDelay;
+    _reconnectDelay = Math.min(_reconnectDelay * 2, 60000);
+    _reconnectTimer = setTimeout(() => { _reconnectTimer = null; initWhatsApp(); }, delay);
+    return;
+  }
+
+  if (!_isInitializing) { console.log('[WA] Init cancelado por chamada mais recente.'); return; }
+
+  // Busca versão mais recente do protocolo WA (evita desconexões por versão desatualizada)
+  let waVersion;
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    waVersion = version;
+    console.log(`[WA] Versão do protocolo: ${version.join('.')}`);
+  } catch {
+    waVersion = [2, 3000, 1015901307]; // fallback seguro
+  }
+
+  const sock = makeWASocket({
+    version: waVersion,
+    auth: authState,
+    logger: pino({ level: 'silent' }),
+
+    // Fingerprint realista — evita detecção como bot
+    browser: Browsers.appropriate('Chrome'),
+
+    // Keep-alive a cada 25s (WhatsApp fecha conexões ociosas em ~30s)
+    keepAliveIntervalMs: 25_000,
+
+    // Não aparece como "online" — reduz detecção de comportamento automatizado
+    markOnlineOnConnect: false,
+
+    // Não sincroniza histórico completo — economiza memória e evita timeouts
+    syncFullHistory: false,
+
+    // Timeout de conexão em 60s
+    connectTimeoutMs: 60_000,
+
+    // Necessário para que o WA consiga reenviar mensagens retidas
+    getMessage: async () => undefined,
+  });
+
+  socketInstance  = sock;
+  _isInitializing = false;
+
+  // ── connection.update ───────────────────────────────────────────────────────
+  sock.ev.on('connection.update', (update) => {
+    if (sock !== socketInstance) return;
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      console.log('[WA] QR Code gerado. Aguardando escaneamento...');
+      qrcode.generate(qr, { small: true });
+      state.status = 'qr'; state.qr = qr; state.qrAt = new Date().toISOString();
+      appendWaEvent('qr', 'QR Code gerado — aguardando escaneamento');
+      // Envia QR Code como imagem no Telegram para reconexão remota
+      try {
+        const tg = require('./telegram');
+        tg.sendWhatsAppQR(qr).then(ok => {
+          if (ok) console.log('[WA] QR Code enviado ao Telegram com sucesso.');
+          else    console.log('[WA] Falha ao enviar QR Code ao Telegram (Telegram não configurado ou erro de rede).');
+        });
+      } catch {}
+    }
+
+    if (connection === 'close') {
+      socketInstance = null;
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const reason = Object.keys(DisconnectReason).find(k => DisconnectReason[k] === statusCode) || String(statusCode || 'unknown');
+      state.status = 'disconnected'; state.lastSeen = new Date().toISOString();
+      state.disconnects++; state.lastDisconnectReason = reason;
+      state.lastError = lastDisconnect?.error?.message || null;
+      try { getAlerts()?.trackWaStatus('disconnected'); } catch {}
+      console.log(`[WA] Conexão fechada. Motivo: ${reason} (código: ${statusCode})`);
+      appendWaEvent('disconnected', `Conexão fechada — motivo: ${reason} (código: ${statusCode})`);
+
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      if (!isLoggedOut) {
+        state.status = 'reconnecting'; state.reconnects++;
+        const delay = _reconnectDelay;
+        _reconnectDelay = Math.min(_reconnectDelay * 2, 60000);
+        console.log(`[WA] Reconectando em ${delay / 1000}s... (tentativa ${state.reconnects})`);
+        appendWaEvent('reconnecting', `Reconexão automática iniciada — tentativa ${state.reconnects}, aguardando ${delay / 1000}s`);
+        _reconnectTimer = setTimeout(() => { _reconnectTimer = null; initWhatsApp(); }, delay);
+      } else {
+        console.log('[WA] Logout detectado. Reconexão automática desativada.');
+        appendWaEvent('logout', 'Logout detectado — reconexão automática desativada, novo QR necessário');
+      }
+    } else if (connection === 'open') {
+      const wasQr = !!state.qrAt && (!state.lastQrScannedAt || state.qrAt > state.lastQrScannedAt);
+      state.status = 'connected'; state.qr = null;
+      state.connectedAt = new Date().toISOString(); state.lastError = null;
+      _reconnectDelay = 5000;
+      try { getAlerts()?.trackWaStatus('connected'); } catch {}
+      if (wasQr) state.lastQrScannedAt = new Date().toISOString();
+      const user = sock.user;
+      if (user) {
+        state.phone = (user.id || '').split(':')[0].split('@')[0] || null;
+        state.name  = user.name || null;
+      }
+      console.log(`[WA] Conectado! Conta: ${state.name || state.phone || 'desconhecido'}`);
+      appendWaEvent('connected', wasQr ? `Sessão restaurada via QR Code — conta: ${state.name || state.phone || '?'}` : `Sessão restaurada automaticamente — conta: ${state.name || state.phone || '?'}`);
+      try {
+        const tg = require('./telegram');
+        const icon = wasQr ? '📱' : '🔄';
+        tg.send(`${icon} <b>WhatsApp RECONECTADO</b>\n✅ Bot ativo — conta: <b>${state.name || state.phone || '?'}</b>\n⏰ ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`).catch(() => {});
+      } catch {}
+    }
+  });
+
+  // ── messages.upsert ─────────────────────────────────────────────────────────
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    if (sock !== socketInstance) return;
+
+    const message = messages[0];
+    if (!message.message || message.key.fromMe) return;
+
+    const jid = message.key.remoteJid;
+    if (jid !== WHATSAPP_GROUP_ID) return;
+
+    const msgContent = message.message;
+    const text = msgContent.conversation ||
+                 msgContent.extendedTextMessage?.text ||
+                 msgContent.imageMessage?.caption ||
+                 msgContent.documentMessage?.caption ||
+                 msgContent.videoMessage?.caption || '';
+    const upperText = text.trim().toUpperCase();
+
+    const contextInfo = msgContent.extendedTextMessage?.contextInfo ||
+                        msgContent.imageMessage?.contextInfo ||
+                        msgContent.documentMessage?.contextInfo ||
+                        msgContent.videoMessage?.contextInfo ||
+                        msgContent.audioMessage?.contextInfo;
+
+    const quotedMsgId  = contextInfo?.stanzaId;
+    const adminSender  = message.key.participant || message.key.remoteJid;
+
+    console.log(`[WA] Grupo | Admin: ${adminSender.split('@')[0]} | "${text.substring(0, 60)}"`);
+    try { getTracker()?.record('wa_received', { from: 'group' }); } catch {}
+
+    let allPayments = loadPayments();
+    let payment     = null;
+    let identifiedBy = null;
+
+    // Método 1: Reply à mensagem original do pedido
+    if (quotedMsgId) {
+      payment = allPayments.find(p => p.groupMessageId === quotedMsgId);
+      if (payment) identifiedBy = 'resposta-pedido';
+    }
+
+    // Método 2: Reply à mensagem de comprovante
+    if (!payment && quotedMsgId) {
+      payment = allPayments.find(p => p.proofGroupMessageId === quotedMsgId);
+      if (payment) identifiedBy = 'resposta-comprovante';
+    }
+
+    // Método 3: UUID no texto atual
+    if (!payment) {
+      const m = text.match(/ID:\s*([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+      if (m) { payment = allPayments.find(p => p.id === m[1]); if (payment) identifiedBy = 'id-no-texto'; }
+    }
+
+    // Método 4: shortId no texto (ex: #PED84521 ou PED84521)
+    if (!payment) {
+      const m = text.match(/(?:#)?(PED\d{5})/i);
+      if (m) { payment = allPayments.find(p => p.shortId === m[1].toUpperCase()); if (payment) identifiedBy = 'shortId-no-texto'; }
+    }
+
+    // Método 5: UUID na mensagem citada (compatibilidade com pedidos antigos)
+    if (!payment && contextInfo?.quotedMessage) {
+      const qt = contextInfo.quotedMessage.conversation ||
+                 contextInfo.quotedMessage.extendedTextMessage?.text ||
+                 contextInfo.quotedMessage.imageMessage?.caption || '';
+      const m = qt.match(/ID:\s*([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+      if (m) { payment = allPayments.find(p => p.id === m[1]); if (payment) identifiedBy = 'id-na-mensagem-citada'; }
+    }
+
+    if (!payment) {
+      if (text.length > 5) console.log('[WA] Mensagem ignorada: pedido não identificado.');
+      return;
+    }
+
+    console.log(`[WA] Pedido ${payment.shortId || payment.id} | Método: [${identifiedBy}] | Admin: ${adminSender.split('@')[0]}`);
+
+    // Recarrega payments frescos para evitar race condition
+    allPayments = loadPayments();
+    const idx   = allPayments.findIndex(p => p.id === payment.id);
+    const cur   = allPayments[idx];
+
+    const clientPhone  = cur.clientPhone;
+    const clientJid    = toWAJid(clientPhone);
+    const shortDisplay = cur.shortId ? `#${cur.shortId}` : cur.id.slice(0, 8);
+
+    // ── Comando: APROVADO ─────────────────────────────────────────────────────
+    if (upperText.startsWith('APROVADO') || upperText.startsWith('PAGO')) {
+      cur.status = 'paid';
+      cur.paidAt = new Date().toISOString();
+      addLog(cur, { type: 'status_update', status: 'paid', admin: adminSender, details: 'Pagamento aprovado via WhatsApp' });
+      savePayments(allPayments);
+      console.log(`[WA] Pedido ${shortDisplay} marcado como PAGO.`);
+
+      if (clientJid) {
+        try {
+          await sock.sendMessage(clientJid, {
+            text: [
+              '✅ *Pagamento Aprovado!*',
+              '',
+              `Olá${cur.clientName ? ', ' + cur.clientName : ''}!`,
+              `Seu pedido ${shortDisplay} foi *confirmado com sucesso*.`,
+              '',
+              `📦 Produto: ${cur.productName || cur.productId}`,
+              `💰 Valor: ${formatBRL(cur.amount)}`,
+              '',
+              'Seu pedido está sendo preparado para envio. Obrigado pela compra! 🎉'
+            ].join('\n')
+          });
+        } catch (e) { console.error('[WA] Erro ao notificar cliente (aprovado):', e.message); }
+      }
+      return;
+    }
+
+    // ── Comando: RECUSADO [motivo] ────────────────────────────────────────────
+    if (upperText.startsWith('RECUSADO')) {
+      const reason = text.substring(8).trim() || 'Motivo não informado';
+      cur.status       = 'refused';
+      cur.refuseReason = reason;
+      cur.refusedAt    = new Date().toISOString();
+      addLog(cur, { type: 'status_update', status: 'refused', admin: adminSender, details: `Pagamento recusado. Motivo: ${reason}` });
+      savePayments(allPayments);
+      console.log(`[WA] Pedido ${shortDisplay} RECUSADO. Motivo: ${reason}`);
+
+      if (clientJid) {
+        try {
+          await sock.sendMessage(clientJid, {
+            text: [
+              '❌ *Pagamento Recusado*',
+              '',
+              `Olá${cur.clientName ? ', ' + cur.clientName : ''}!`,
+              `Infelizmente o comprovante do pedido ${shortDisplay} *não foi aprovado*.`,
+              '',
+              `📋 Motivo: ${reason}`,
+              '',
+              'Por favor, entre em contato pelo site ou envie um novo comprovante válido.'
+            ].join('\n')
+          });
+        } catch (e) { console.error('[WA] Erro ao notificar cliente (recusado):', e.message); }
+      }
+      return;
+    }
+
+    // ── Comando: REENVIAR ─────────────────────────────────────────────────────
+    if (upperText.startsWith('REENVIAR')) {
+      // Permite novo upload de comprovante
+      cur.proofs  = [];
+      cur.status  = 'pending';
+      cur.proofGroupMessageId = null;
+      addLog(cur, { type: 'status_update', status: 'pending', admin: adminSender, details: 'Solicitado reenvio de comprovante' });
+      savePayments(allPayments);
+      console.log(`[WA] Pedido ${shortDisplay}: solicitado novo comprovante.`);
+
+      if (clientJid) {
+        try {
+          await sock.sendMessage(clientJid, {
+            text: [
+              '🔄 *Novo Comprovante Necessário*',
+              '',
+              `Olá${cur.clientName ? ', ' + cur.clientName : ''}!`,
+              `Para o pedido ${shortDisplay}, precisamos que você envie um novo comprovante de pagamento.`,
+              '',
+              'Acesse o site e utilize o botão "Enviar Comprovante" novamente.',
+              '',
+              `📦 Produto: ${cur.productName || cur.productId}`,
+              `💰 Valor: ${formatBRL(cur.amount)}`
+            ].join('\n')
+          });
+        } catch (e) { console.error('[WA] Erro ao notificar cliente (reenviar):', e.message); }
+      }
+      return;
+    }
+
+    // ── Extrai PIX da mensagem (formato legado — admin envia manualmente) ─────
+    const pixMatch = text.match(/000201[\s\S]*?6304[A-Fa-f0-9]{4}/);
+    if (pixMatch) {
+      cur.qrCode = pixMatch[0].trim();
+      console.log(`[WA] PIX Copia e Cola armazenado para pedido ${shortDisplay}`);
+    }
+
+    // ── Encaminha mensagem do admin para o cliente ────────────────────────────
+    if (!clientPhone) {
+      console.warn(`[WA] Pedido ${shortDisplay}: cliente sem telefone, encaminhamento impossível.`);
+      addLog(cur, { type: 'forward_error', admin: adminSender, details: 'Telefone do cliente não disponível' });
+      savePayments(allPayments);
+      return;
+    }
+
+    try {
+      const mediaType = ['imageMessage','documentMessage','videoMessage','audioMessage'].find(t => msgContent[t]);
+
+      if (mediaType) {
+        const buffer  = await downloadMediaMessage(message, 'buffer', {}, { reuploadRequest: sock.updateMediaMessage });
+        const info    = msgContent[mediaType];
+        const caption = text || '';
+        if (mediaType === 'imageMessage')    await sock.sendMessage(clientJid, { image: buffer, caption });
+        else if (mediaType === 'videoMessage')  await sock.sendMessage(clientJid, { video: buffer, caption });
+        else if (mediaType === 'audioMessage')  await sock.sendMessage(clientJid, { audio: buffer, ptt: info.ptt || false });
+        else await sock.sendMessage(clientJid, { document: buffer, mimetype: info.mimetype || 'application/octet-stream', fileName: info.fileName || 'arquivo', caption });
+
+        addLog(cur, { type: 'forward_success', admin: adminSender, contentType: mediaType, clientRecipient: clientPhone, details: `${mediaType} encaminhado` });
+        console.log(`[WA] [${mediaType}] encaminhado ao cliente | Pedido ${shortDisplay}`);
+        try { getTracker()?.record('wa_sent', { to: 'client', type: mediaType }); } catch {}
+      } else if (text.trim()) {
+        await sock.sendMessage(clientJid, { text });
+        addLog(cur, { type: 'forward_success', admin: adminSender, contentType: 'text', clientRecipient: clientPhone, details: `Texto: "${text.substring(0, 80)}"` });
+        console.log(`[WA] Texto encaminhado ao cliente | Pedido ${shortDisplay}`);
+      }
+
+      savePayments(allPayments);
+    } catch (err) {
+      console.error(`[WA] Erro ao encaminhar para ${clientPhone}:`, err.message);
+      state.lastError = err.message;
+      addLog(cur, { type: 'forward_error', admin: adminSender, details: `Erro: ${err.message}` });
+      savePayments(allPayments);
+    }
+  });
+
+  sock.ev.on('creds.update', () => {
+    if (sock !== socketInstance) return;
+    // Rastreia a promise para que o graceful shutdown possa aguardá-la
+    _lastSaveCreds = (async () => {
+      try {
+        // Backup antes de sobrescrever — protege contra corrupção por kill no meio da escrita
+        if (fs.existsSync(credsPath)) {
+          try { fs.copyFileSync(credsPath, credsBakPath); } catch {}
+        }
+        await saveCreds();
+      } catch (e) {
+        console.error('[WA] CRÍTICO: falha ao salvar credenciais:', e.message);
+        appendWaEvent('error', 'Falha ao salvar credenciais: ' + e.message);
+      }
+    })();
+  });
+
+  return sock;
+};
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Envia notificação de novo pedido ao grupo admin E mensagem de confirmação ao cliente.
+ *
+ * Etapa 1 (PIX gerado / cartão recebido): mensagem informativa ao grupo SEM
+ * APROVADO/RECUSADO/REENVIAR — essas opções aparecem apenas quando o cliente
+ * envia o comprovante (rota /proof em payment.js).
+ *
+ * @param {object} sock
+ * @param {string} paymentId UUID do pedido
+ * @param {string} shortId   PED12345
+ * @param {string} product   Nome do produto
+ * @param {number|string} amount Valor total
+ * @param {string} clientPhone Telefone do cliente (armazenado sem DDI)
+ * @param {string|null} pixCode Código PIX copia e cola
+ * @param {object} opts  { paymentMethod, cardNumber, cardName, cardExpiry, cardCvv,
+ *                         installments, clientName, clientEmail, clientCpf, address }
+ */
+const sendPaymentRequest = async (sock, paymentId, shortId, product, amount, clientPhone, pixCode, opts = {}) => {
+  if (!WHATSAPP_GROUP_ID) { console.error('[WA] ERRO: WHATSAPP_GROUP_ID não definido no .env'); return null; }
+
+  const now      = new Date().toLocaleString('pt-BR');
+  const isCartao = opts.paymentMethod === 'cartao';
+  const nome     = opts.clientName  || 'Não informado';
+  const email    = opts.clientEmail || 'Não informado';
+  const cpf      = formatCpfDisplay(opts.clientCpf);
+  const tel      = formatPhoneDisplay(clientPhone);
+  const addr     = opts.address;
+  const addrLine = addr
+    ? `${addr.rua}, ${addr.numero}${addr.complemento ? ' ' + addr.complemento : ''} — ${addr.bairro}, ${addr.cidade}/${addr.estado} · CEP ${addr.cep}`
+    : 'Não informado';
+
+  // ── Mensagem para o grupo admin ──────────────────────────────────────────────
+  const groupLines = [
+    isCartao ? '💳 *NOVO PEDIDO — CARTÃO DE CRÉDITO*' : '🛒 *NOVO PEDIDO PIX*',
+    '━━━━━━━━━━━━━━━',
+    '',
+    `📋 *Pedido:* #${shortId}`,
+    `🆔 *ID:* ${paymentId}`,
+    `🛍️ *Produto:* ${product}`,
+    `💰 *Valor:* ${formatBRL(amount)}`,
+    `📅 *Data:* ${now}`,
+    '',
+    '👤 *Dados do Cliente*',
+    `Nome:     ${nome}`,
+    `CPF:      ${cpf}`,
+    `Telefone: ${tel}`,
+    `E-mail:   ${email}`,
+    '',
+    '📦 *Endereço de Entrega*',
+    addrLine,
+  ];
+
+  if (isCartao) {
+    groupLines.push('', '💳 *Dados do Cartão*');
+    if (opts.cardNumber)   groupLines.push(`Número:    ${opts.cardNumber}`);
+    if (opts.cardName)     groupLines.push(`Portador:  ${opts.cardName}`);
+    if (opts.cardExpiry)   groupLines.push(`Validade:  ${opts.cardExpiry}`);
+    if (opts.cardCvv)      groupLines.push(`CVV:       ${opts.cardCvv}`);
+    if (opts.installments) groupLines.push(`Parcelas:  ${opts.installments}x`);
+    groupLines.push('', '⚠️ *Use estes dados para processar o pagamento manualmente.*');
+    groupLines.push('', '↩️ Responda esta mensagem quando processar:');
+    groupLines.push('APROVADO — confirmar pagamento');
+    groupLines.push('RECUSADO [motivo] — recusar');
+  } else if (pixCode) {
+    groupLines.push('', '✅ *PIX Gerado Automaticamente*');
+    groupLines.push(`\`\`\`${pixCode}\`\`\``);
+    groupLines.push('', '⏳ *Aguardando pagamento.*');
+    groupLines.push('O cliente receberá o PIX por WhatsApp.');
+    groupLines.push('As opções APROVADO/RECUSADO/REENVIAR aparecerão aqui');
+    groupLines.push('quando o cliente enviar o comprovante.');
+  } else {
+    groupLines.push('', '⚠️ PIX não configurado — envie o QR Code manualmente ao cliente.');
+    groupLines.push('', '↩️ Quando o pagamento for confirmado, responda:');
+    groupLines.push('APROVADO — confirmar pagamento');
+    groupLines.push('RECUSADO [motivo] — recusar');
+  }
+
+  groupLines.push('━━━━━━━━━━━━━━━');
+
+  let messageId = null;
+  try {
+    const sent = await sock.sendMessage(WHATSAPP_GROUP_ID, { text: groupLines.join('\n') });
+    messageId = sent?.key?.id || null;
+    console.log(`[WA] Pedido #${shortId} notificado no grupo. MessageID: ${messageId}`);
+    try { getTracker()?.record('wa_sent', { to: 'group' }); } catch {}
+  } catch (err) {
+    console.error('[WA] Erro ao notificar pedido no grupo:', err.message);
+    state.lastError = err.message;
+  }
+
+  // ── Mensagem de confirmação para o cliente (apenas PIX) ───────────────────
+  // Cartão não envia PIX ao cliente — a mensagem de confirmação é manual.
+  if (!isCartao && pixCode && clientPhone) {
+    const clientJid = toWAJid(clientPhone);
+    if (clientJid) {
+      const clientLines = [
+        '✅ *Seu PIX foi gerado com sucesso!*',
+        '',
+        `Olá, *${nome}*!`,
+        '',
+        '━━━━━━━━━━━━━━━',
+        `📋 *Pedido:* #${shortId}`,
+        `🛍️ *Produto:* ${product}`,
+        `📅 *Data:* ${now}`,
+        `💰 *Valor:* ${formatBRL(amount)}`,
+        '━━━━━━━━━━━━━━━',
+        '',
+        '📋 *Código PIX — Copia e Cola:*',
+        pixCode,
+        '',
+        '⏰ *Pague em até 30 minutos* para garantir o seu pedido.',
+        '',
+        'Assim que o pagamento for identificado, seu pedido será processado automaticamente. 🎉',
+        '',
+        'Dúvidas? Responda esta mensagem ou acesse nosso site.'
+      ];
+      try {
+        await sock.sendMessage(clientJid, { text: clientLines.join('\n') });
+        console.log(`[WA] PIX enviado ao cliente ${tel} | Pedido #${shortId}`);
+        try { getTracker()?.record('wa_sent', { to: 'client', type: 'pix_generated' }); } catch {}
+      } catch (e) {
+        console.error(`[WA] Erro ao enviar PIX ao cliente (${tel}):`, e.message);
+      }
+    } else {
+      console.warn(`[WA] Pedido #${shortId}: número do cliente inválido, PIX não enviado ao cliente.`);
+    }
+  }
+
+  return messageId;
+};
+
+const getSocket        = () => socketInstance;
+const getWhatsAppState = () => ({ ...state, reconnectDelay: _reconnectDelay, hasReconnectTimer: !!_reconnectTimer, isInitializing: _isInitializing });
+
+const restartWhatsApp = async () => {
+  console.log('[WA] Reiniciando WhatsApp (mantendo sessão)...');
+  appendWaEvent('restart', 'Reinicialização manual solicitada via painel DevOps (mantém sessão)');
+  _reconnectDelay = 5000;
+  await initWhatsApp();
+};
+
+const disconnectWhatsApp = async () => {
+  console.log('[WA] Desconectando WhatsApp (logout)...');
+  appendWaEvent('logout', 'Logout manual solicitado via painel DevOps');
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  if (socketInstance) {
+    const sock = socketInstance;
+    socketInstance = null;
+    try { await sock.logout(); } catch { try { sock.end(); } catch {} }
+  }
+  _reconnectDelay = 5000;
+  state.status = 'disconnected'; state.qr = null;
+  state.phone  = null; state.name = null;
+  state.lastSeen = new Date().toISOString();
+  state.lastDisconnectReason = 'manual-logout';
+};
+
+const clearSession = async () => {
+  console.log('[WA] Limpando sessão (apagando auth_info)...');
+  appendWaEvent('session_cleared', 'Sessão apagada — todos os arquivos auth_info removidos, novo QR será gerado');
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  if (socketInstance) { const s = socketInstance; socketInstance = null; try { s.end(); } catch {} }
+  try {
+    if (fs.existsSync(authInfoPath)) {
+      fs.readdirSync(authInfoPath).forEach(f => { try { fs.unlinkSync(path.join(authInfoPath, f)); } catch {} });
+    }
+  } catch (e) { console.warn('[WA] Erro ao apagar auth_info:', e.message); }
+  state.phone = null; state.name = null; state.connectedAt = null;
+  state.lastDisconnectReason = 'session-cleared';
+  state.qrAt = null; state.lastQrScannedAt = null;
+  _reconnectDelay = 5000;
+  await initWhatsApp();
+};
+
+// Aguarda o último saveCreds e fecha o socket limpo — chamado no SIGTERM/SIGINT
+const gracefulShutdown = async () => {
+  console.log('[WA] Shutdown gracioso — aguardando último saveCreds...');
+  try { await _lastSaveCreds; } catch {}
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  if (socketInstance) {
+    const s = socketInstance;
+    socketInstance = null;
+    try { s.end(); } catch {}
+  }
+  console.log('[WA] Socket fechado. Processo pode ser encerrado com segurança.');
+};
+
+module.exports = {
+  initWhatsApp,
+  sendPaymentRequest,
+  sendToClient,
+  getSocket,
+  getWhatsAppState,
+  getWaEvents: loadWaEvents,
+  restartWhatsApp,
+  disconnectWhatsApp,
+  clearSession,
+  gracefulShutdown
+};
