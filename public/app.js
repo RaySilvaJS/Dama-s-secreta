@@ -352,7 +352,7 @@ const getTimeAgo = () => {
 const _buildProductCardHTML = (product) => {
   const productUrl = buildProductUrl(product.id);
   const mainImage = getFirstValidImage(product);
-  const seller = (product.seller || '').replace(/Ir para Loja Oficial/gi, '').trim() || 'LUAR SEDUÇÃO';
+  const seller = (product.seller || '').replace(/Ir para Loja Oficial/gi, '').trim() || "DAMA'S SECRETA";
   const isFav = _getFavs().includes(String(product.id));
   const extras = getOrCreateCardExtras(product.id);
   const { brinde, descontoHoje, freteGratis, stock } = extras;

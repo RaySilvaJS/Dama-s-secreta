@@ -1090,7 +1090,7 @@ tbody tr:last-child td { border-bottom: none; }
             </div>
             <div>
               <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Nome do Recebedor (max. 25 chars)</label>
-              <input id="fin-pix-name" class="input" style="width:100%" placeholder="LUAR SEDUÇÃO" maxlength="25"/>
+              <input id="fin-pix-name" class="input" style="width:100%" placeholder="DAMA'S SECRETA" maxlength="25"/>
             </div>
             <div>
               <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Cidade do Recebedor (max. 15 chars)</label>
@@ -5150,7 +5150,7 @@ async function generateTestPixQR() {
     // Carrega config PIX direto da API (não depende do formulário estar preenchido)
     const cfg = await api.get('/api/admin/pix-config');
     const key  = cfg?.pixKey?.trim();
-    const name = (cfg?.receiverName?.trim() || 'LUAR SEDUÇÃO').substring(0, 25);
+    const name = (cfg?.receiverName?.trim() || "DAMA'S SECRETA").substring(0, 25);
     const city = (cfg?.receiverCity?.trim() || 'Rio de Janeiro').substring(0, 15);
 
     const amount = parseFloat(document.getElementById('pix-test-amount')?.value || '0');
