@@ -17,10 +17,10 @@
         img.alt = cfg.siteName;
         img.className = 'site-logo-img';
         var fontSize = parseFloat(getComputedStyle(el).fontSize) || 20;
-        var h = Math.round(fontSize * 1.6);
+        var h = Math.round(fontSize * 2.2);
         img.style.height = h + 'px';
         img.style.width = 'auto';
-        img.style.maxWidth = '220px';
+        img.style.maxWidth = '260px';
         img.style.objectFit = 'contain';
         img.style.verticalAlign = 'middle';
         el.appendChild(img);
