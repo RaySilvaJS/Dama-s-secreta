@@ -40,7 +40,14 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 if (!fs.existsSync(productsPath)) {
-  fs.writeFileSync(productsPath, '[]', 'utf-8');
+  // Migração: servidores já em produção têm o arquivo com o nome antigo
+  // (server/data/ não é tocado por git pull, então o rename local não chega lá sozinho)
+  const legacyProductsPath = path.join(dataDir, 'products.json');
+  if (fs.existsSync(legacyProductsPath)) {
+    fs.renameSync(legacyProductsPath, productsPath);
+  } else {
+    fs.writeFileSync(productsPath, '[]', 'utf-8');
+  }
 }
 if (!fs.existsSync(usersPath)) {
   fs.writeFileSync(usersPath, '[]', 'utf-8');
