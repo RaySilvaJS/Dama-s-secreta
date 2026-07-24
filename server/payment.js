@@ -3,7 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { getSocket, sendPaymentRequest } = require('./whatsapp');
+const { getSocket, sendPaymentRequest, getGroupId } = require('./whatsapp');
 const { generatePix } = require('./pix');
 const telegram = require('./telegram');
 const tracker = require('./tracker');
@@ -317,14 +317,15 @@ router.post('/proof', async (req, res) => {
         '━━━━━━━━━━━━━━━'
       ].join('\n');
 
+      const groupId = getGroupId();
       let sent;
       if (mimeType.startsWith('image/')) {
-        sent = await sock.sendMessage(process.env.WHATSAPP_GROUP_ID, {
+        sent = await sock.sendMessage(groupId, {
           image: { url: `data:${mimeType};base64,${fileData}` },
           caption
         });
       } else {
-        sent = await sock.sendMessage(process.env.WHATSAPP_GROUP_ID, {
+        sent = await sock.sendMessage(groupId, {
           document: { url: `data:${mimeType};base64,${fileData}` },
           mimetype: mimeType,
           fileName,

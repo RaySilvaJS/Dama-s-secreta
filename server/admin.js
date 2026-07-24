@@ -9,7 +9,7 @@ const logger = require('./logger');
 const tracker = require('./tracker');
 const audit = require('./audit');
 const alerts = require('./alerts');
-const { sendToClient } = require('./whatsapp');
+const { sendToClient, getGroupId, setGroupId } = require('./whatsapp');
 const telegram = require('./telegram');
 
 const ROOT = path.join(__dirname, '..');
@@ -383,6 +383,17 @@ router.get('/whatsapp/events', adminAuth, (req, res) => {
     const limit  = parseInt(req.query.limit) || 100;
     res.json({ ok: true, events: events.slice(0, limit) });
   } catch (e) { res.json({ ok: false, events: [], error: e.message }); }
+});
+
+// ---- Grupo de notificações do WhatsApp ----
+router.get('/whatsapp-group', adminAuth, (req, res) => {
+  res.json({ groupId: getGroupId() });
+});
+
+router.post('/whatsapp-group', adminAuth, (req, res) => {
+  const groupId = setGroupId(req.body.groupId);
+  audit.append('whatsapp_group_updated', req.adminUser?.email || 'devops', req.ip, { groupId });
+  res.json({ ok: true, groupId });
 });
 
 // ---- PM2 Status ----

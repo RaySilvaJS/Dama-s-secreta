@@ -2,7 +2,7 @@
   var DEFAULT_NAME = "DAMA'S SECRETA";
   var DEFAULTS = {
     siteName: DEFAULT_NAME,
-    whatsappNumber: '5521988631029',
+    whatsappNumber: '5511920041484',
     instagramUrl: 'https://www.instagram.com/luar.seducao/',
     logoUrl: ''
   };

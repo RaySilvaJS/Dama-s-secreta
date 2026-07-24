@@ -27,7 +27,7 @@ const alerts = require('./alerts');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER || '5521988631029';
+const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER || '5511920041484';
 const USE_BAILEYS = process.env.USE_BAILEYS === 'true';
 
 const publicPath = path.join(__dirname, '..', 'public'); //
@@ -309,7 +309,7 @@ app.get('/api/site-config', (req, res) => {
   const sc = loadConfig().siteConfig || {};
   res.json({
     siteName:       sc.siteName       || "DAMA'S SECRETA",
-    whatsappNumber: sc.whatsappNumber || '5521988631029',
+    whatsappNumber: sc.whatsappNumber || '5511920041484',
     instagramUrl:   sc.instagramUrl   || 'https://www.instagram.com/luar.seducao/',
     logoUrl:        sc.logoUrl        || ''
   });

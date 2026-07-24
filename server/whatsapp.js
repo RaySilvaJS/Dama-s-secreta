@@ -5,7 +5,24 @@ const fs     = require('fs');
 
 const paymentsPath   = path.join(__dirname, 'data', 'payments.json');
 const WA_EVENTS_PATH = path.join(__dirname, 'data', 'wa-events.json');
+const WA_GROUP_PATH  = path.join(__dirname, 'data', 'wa-group.json');
 const WHATSAPP_GROUP_ID = process.env.WHATSAPP_GROUP_ID;
+
+// ── Grupo de notificações — editável via DevOps, com fallback para o .env ────
+const getGroupId = () => {
+  let saved = '';
+  try { saved = (JSON.parse(fs.readFileSync(WA_GROUP_PATH, 'utf-8')).groupId || '').trim(); } catch {}
+  return saved || WHATSAPP_GROUP_ID || '';
+};
+
+const setGroupId = (id) => {
+  const groupId = (id || '').trim();
+  try {
+    fs.mkdirSync(path.dirname(WA_GROUP_PATH), { recursive: true });
+    fs.writeFileSync(WA_GROUP_PATH, JSON.stringify({ groupId }, null, 2), 'utf-8');
+  } catch (e) { console.error('[WA] Erro ao salvar grupo:', e.message); }
+  return groupId;
+};
 
 const getTracker = () => { try { return require('./tracker'); } catch { return null; } };
 const getAlerts  = () => { try { return require('./alerts');  } catch { return null; } };
@@ -268,7 +285,7 @@ const initWhatsApp = async () => {
     if (!message.message || message.key.fromMe) return;
 
     const jid = message.key.remoteJid;
-    if (jid !== WHATSAPP_GROUP_ID) return;
+    if (jid !== getGroupId()) return;
 
     const msgContent = message.message;
     const text = msgContent.conversation ||
@@ -515,7 +532,8 @@ const initWhatsApp = async () => {
  *                         installments, clientName, clientEmail, clientCpf, address }
  */
 const sendPaymentRequest = async (sock, paymentId, shortId, product, amount, clientPhone, pixCode, opts = {}) => {
-  if (!WHATSAPP_GROUP_ID) { console.error('[WA] ERRO: WHATSAPP_GROUP_ID não definido no .env'); return null; }
+  const groupId = getGroupId();
+  if (!groupId) { console.error('[WA] ERRO: grupo de notificações não configurado (DevOps ou .env)'); return null; }
 
   const now      = new Date().toLocaleString('pt-BR');
   const isCartao = opts.paymentMethod === 'cartao';
@@ -578,7 +596,7 @@ const sendPaymentRequest = async (sock, paymentId, shortId, product, amount, cli
 
   let messageId = null;
   try {
-    const sent = await sock.sendMessage(WHATSAPP_GROUP_ID, { text: groupLines.join('\n') });
+    const sent = await sock.sendMessage(groupId, { text: groupLines.join('\n') });
     messageId = sent?.key?.id || null;
     console.log(`[WA] Pedido #${shortId} notificado no grupo. MessageID: ${messageId}`);
     try { getTracker()?.record('wa_sent', { to: 'group' }); } catch {}
@@ -694,5 +712,7 @@ module.exports = {
   restartWhatsApp,
   disconnectWhatsApp,
   clearSession,
-  gracefulShutdown
+  gracefulShutdown,
+  getGroupId,
+  setGroupId
 };
