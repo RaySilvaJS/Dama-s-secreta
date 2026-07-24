@@ -8,8 +8,7 @@
   // DevOps master token (set when user logged into /devops)
   const DEVOPS_TOKEN = localStorage.getItem('devops_token') || null;
   const CATALOGS = {
-    iphones: 'iPhones', android: 'Android', consoles: 'Consoles',
-    smartwatches: 'Smartwatches', acessorios: 'Acessórios', informatica: 'Informática'
+    loja: 'Loja'
   };
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

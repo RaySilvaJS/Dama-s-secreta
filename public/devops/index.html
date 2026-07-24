@@ -3534,8 +3534,8 @@ function closeOrderDrawer() {
 // ═══════════════════════════════════════════════
 // CATALOGS MANAGER
 // ═══════════════════════════════════════════════
-const CATALOG_LABELS = { iphones:'Conjuntos', android:'Lingeries', consoles:'Bodies', smartwatches:'Sutiãs', acessorios:'Calcinhas', informatica:'Pijamas', suplementos:'Moda Praia' };
-const CATALOG_ICONS  = { iphones:'🌸', android:'🩱', consoles:'✨', smartwatches:'🌸', acessorios:'💎', informatica:'🌙', suplementos:'🌊' };
+const CATALOG_LABELS = { loja:'Loja (todos os produtos)' };
+const CATALOG_ICONS  = { loja:'🛍️' };
 
 function fmtSize(bytes) {
   if (!bytes) return '0 B';
@@ -3716,13 +3716,7 @@ async function uploadCatalog(key, input) {
 
 // Mapa inverso: nome do arquivo → chave do catálogo
 const CATALOG_FILENAME_MAP = {
-  'iphones.json':      'iphones',
-  'androids.json':     'android',
-  'consoles.json':     'consoles',
-  'smartwatches.json': 'smartwatches',
-  'acessorios.json':   'acessorios',
-  'informatica.json':  'informatica',
-  'suplementos.json':  'suplementos',
+  'loja.json': 'loja',
 };
 
 async function uploadAllCatalogs(input) {
@@ -3914,7 +3908,7 @@ async function loadTrashItems() {
     return;
   }
 
-  const CATALOG_LABELS_MAP = { iphones: 'Conjuntos', android: 'Lingeries', consoles: 'Bodies', smartwatches: 'Sutiãs', acessorios: 'Calcinhas', informatica: 'Pijamas', suplementos: 'Moda Praia' };
+  const CATALOG_LABELS_MAP = { loja: 'Loja' };
 
   list.innerHTML = `
     <table style="width:100%;border-collapse:collapse">

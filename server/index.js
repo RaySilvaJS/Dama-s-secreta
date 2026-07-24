@@ -31,7 +31,7 @@ const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER || '5511920041484';
 const USE_BAILEYS = process.env.USE_BAILEYS === 'true';
 
 const publicPath = path.join(__dirname, '..', 'public'); //
-const productsPath = path.join(__dirname, 'data', 'products.json');
+const productsPath = path.join(__dirname, 'data', 'loja.json');
 const usersPath = path.join(__dirname, 'data', 'users.json');
 
 // Garante que o diretório de dados exista para evitar erros de ENOENT
@@ -185,7 +185,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve catalog JSONs de server/data/catalogs/ — tem prioridade sobre public/data/
+// Serve loja.json (server/data/) — tem prioridade sobre public/data/
 // Garante que uploads via DevOps sejam visíveis imediatamente no frontend
 // CATALOG_FILES e catalogDataPath são lidos lazily (no momento da request, não do boot)
 app.get('/data/:filename', (req, res, next) => {
@@ -283,6 +283,7 @@ const loadProducts = () => {
 
 const saveProducts = (products) => {
   fs.writeFileSync(productsPath, JSON.stringify(products, null, 2), 'utf-8');
+  delete _catalogCache['loja.json'];
 };
 
 // ==================== LINGERIE CATEGORY DETECTION ====================
@@ -360,73 +361,29 @@ app.get('/api/products/:id', (req, res) => {
   res.json(product);
 });
 
-// Busca produto em todos os catálogos de /public/data/
+// loja.json é a única fonte de produtos — usada tanto por /api/products quanto pelo Catalog Manager do DevOps
 const CATALOG_FILES = {
-  iphones:      'iphones.json',
-  android:      'androids.json',
-  consoles:     'consoles.json',
-  smartwatches: 'smartwatches.json',
-  acessorios:   'acessorios.json',
-  informatica:  'informatica.json',
-  suplementos:  'suplementos.json',
+  loja: 'loja.json',
 };
-// Catálogos ficam em server/data/catalogs/ para sobreviver a deploys (git pull não toca server/data/)
-// Na primeira execução, os seeds de public/data/ são copiados para cá automaticamente.
-const catalogDataPath = path.join(__dirname, 'data', 'catalogs');
-const catalogSeedPath = path.join(__dirname, '..', 'public', 'data');
+const catalogDataPath = path.join(__dirname, 'data');
 const _catalogCache = {};
-
-// Bootstrap: garante que a pasta exista e copia seeds individuais que faltam
-// (cobre tanto primeira execução quanto adição de novas categorias ao código)
-if (!fs.existsSync(catalogDataPath)) {
-  fs.mkdirSync(catalogDataPath, { recursive: true });
-}
-for (const filename of Object.values(CATALOG_FILES)) {
-  const dst = path.join(catalogDataPath, filename);
-  if (!fs.existsSync(dst)) {
-    const src = path.join(catalogSeedPath, filename);
-    if (fs.existsSync(src)) try { fs.copyFileSync(src, dst); } catch {}
-  }
-}
-
-const loadCatalogFile = (filename) => {
-  if (_catalogCache[filename]) return _catalogCache[filename];
-  try {
-    const data = JSON.parse(fs.readFileSync(path.join(catalogDataPath, filename), 'utf-8'));
-    _catalogCache[filename] = data;
-    return data;
-  } catch { return []; }
-};
 
 app.get('/api/catalog/product/:id', (req, res) => {
   const id = String(req.params.id);
-  for (const [key, filename] of Object.entries(CATALOG_FILES)) {
-    const catalog = loadCatalogFile(filename);
-    const product = catalog.find(p => String(p.id) === id);
-    if (product && product.price > 0) {
-      // Irmãos = mesmo modelo (para variações de cor/armazenamento)
-      const siblings = product.model
-        ? catalog.filter(p => p.model === product.model && p.price > 0)
-        : [product];
-      // Relacionados = 8 outros produtos do mesmo catálogo (sem o atual)
-      const related = catalog.filter(p => String(p.id) !== id && p.price > 0).slice(0, 8)
-        .map(({ id, name, model, price, priceOriginal, rating, images }) =>
-          ({ id, name, model, price, priceOriginal, rating, images: (images || []).slice(0, 1) }));
-      return res.json({ product, catalogKey: key, siblings, related });
-    }
+  const products = loadProducts();
+  const product = products.find(p => String(p.id) === id);
+  if (!product || !(product.price > 0)) {
+    return res.status(404).json({ error: 'Produto não encontrado', id });
   }
-  // Fallback: busca em products.json (produtos importados via devops/scraper)
-  const customProducts = loadProducts();
-  const customProduct = customProducts.find(p => String(p.id) === id);
-  if (customProduct && customProduct.price > 0) {
-    const related = customProducts
-      .filter(p => String(p.id) !== id && p.price > 0)
-      .slice(0, 8)
-      .map(({ id, name, model, price, priceOriginal, rating, images }) =>
-        ({ id, name, model, price, priceOriginal, rating, images: (images || []).slice(0, 1) }));
-    return res.json({ product: customProduct, catalogKey: 'custom', siblings: [customProduct], related });
-  }
-  res.status(404).json({ error: 'Produto não encontrado', id });
+  // Irmãos = mesmo modelo (para variações de cor/armazenamento)
+  const siblings = product.model
+    ? products.filter(p => p.model === product.model && p.price > 0)
+    : [product];
+  // Relacionados = 8 outros produtos (sem o atual)
+  const related = products.filter(p => String(p.id) !== id && p.price > 0).slice(0, 8)
+    .map(({ id, name, model, price, priceOriginal, rating, images }) =>
+      ({ id, name, model, price, priceOriginal, rating, images: (images || []).slice(0, 1) }));
+  res.json({ product, catalogKey: 'loja', siblings, related });
 });
 
 // ==================== ADMIN CATALOG ENDPOINTS ====================
@@ -690,9 +647,7 @@ const CATALOG_HISTORY_FILE = path.join(__dirname, 'data', 'catalog-history.json'
 if (!fs.existsSync(CATALOG_BACKUPS_DIR)) fs.mkdirSync(CATALOG_BACKUPS_DIR, { recursive: true });
 
 const CATALOG_LABELS = {
-  iphones: 'iPhones', android: 'Androids', consoles: 'Consoles',
-  smartwatches: 'Smartwatches', acessorios: 'Acessórios', informatica: 'Informática',
-  suplementos: 'Suplementos'
+  loja: 'Loja (todos os produtos)',
 };
 
 function loadCatalogHistory() {

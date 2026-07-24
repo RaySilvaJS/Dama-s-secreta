@@ -179,7 +179,7 @@ router.post('/system/deploy', adminAuth, (req, res) => {
                 // JSON fallback — apenas os arquivos JSON críticos
                 try {
                   const jsonData = {};
-                  ['payments.json','users.json','products.json','config.json','security.json'].forEach(f => {
+                  ['payments.json','users.json','loja.json','config.json','security.json'].forEach(f => {
                     const fp = path.join(DATA, f);
                     if (fs.existsSync(fp)) { try { jsonData[f] = JSON.parse(fs.readFileSync(fp, 'utf-8')); } catch {} }
                   });
@@ -517,7 +517,7 @@ router.post('/backup', adminAuth, (req, res) => {
       // JSON fallback
       try {
         const data = {};
-        ['payments.json','users.json','products.json','config.json','security.json'].forEach(f => {
+        ['payments.json','users.json','loja.json','config.json','security.json'].forEach(f => {
           const fp = path.join(DATA, f);
           if (fs.existsSync(fp)) { try { data[f] = JSON.parse(fs.readFileSync(fp, 'utf-8')); } catch {} }
         });
