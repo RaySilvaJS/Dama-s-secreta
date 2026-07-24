@@ -4,6 +4,7 @@ const path   = require('path');
 const fs     = require('fs');
 
 const paymentsPath   = path.join(__dirname, 'data', 'payments.json');
+const lojaPath       = path.join(__dirname, 'data', 'loja.json');
 const WA_EVENTS_PATH = path.join(__dirname, 'data', 'wa-events.json');
 const WA_GROUP_PATH  = path.join(__dirname, 'data', 'wa-group.json');
 const WHATSAPP_GROUP_ID = process.env.WHATSAPP_GROUP_ID;
@@ -38,6 +39,21 @@ const appendWaEvent = (type, detail = '') => {
   } catch (e) { console.error('[WA] Erro ao gravar evento:', e.message); }
 };
 const savePayments = (p) => fs.writeFileSync(paymentsPath, JSON.stringify(p, null, 2), 'utf-8');
+
+// Baixa 1 unidade do estoque do produto vendido — nunca deve derrubar a aprovação do pagamento
+const decrementStock = (productId) => {
+  if (!productId) return;
+  try {
+    const items = JSON.parse(fs.readFileSync(lojaPath, 'utf-8'));
+    const product = items.find(p => String(p.id) === String(productId));
+    if (!product || typeof product.stock !== 'number') return;
+    product.stock = Math.max(0, product.stock - 1);
+    fs.writeFileSync(lojaPath, JSON.stringify(items, null, 2), 'utf-8');
+    console.log(`[WA] Estoque de ${productId} atualizado: ${product.stock} restante(s).`);
+  } catch (e) {
+    console.warn('[WA] Falha ao baixar estoque (não crítico):', e.message);
+  }
+};
 const formatBRL    = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const addLog = (payment, entry) => {
@@ -366,6 +382,7 @@ const initWhatsApp = async () => {
       cur.paidAt = new Date().toISOString();
       addLog(cur, { type: 'status_update', status: 'paid', admin: adminSender, details: 'Pagamento aprovado via WhatsApp' });
       savePayments(allPayments);
+      decrementStock(cur.productId);
       console.log(`[WA] Pedido ${shortDisplay} marcado como PAGO.`);
 
       if (clientJid) {

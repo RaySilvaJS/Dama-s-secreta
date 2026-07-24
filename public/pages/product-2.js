@@ -492,6 +492,7 @@
       ? getOrCreateCardExtras(product.id)
       : { descontoHoje: 20, brinde: 'Apple Watch', freteGratis: false, stock: Math.floor(Math.random() * 50) + 1 };
 
+    const isUnavailable = product.sold === true || Number(product.stock) <= 0;
     const mlPrice = product.price;
     const basePrice = storeDiscount > 0
       ? Math.round(mlPrice * (1 - storeDiscount / 100) * 100) / 100
@@ -661,21 +662,24 @@
 
           <div class="card" id="stock-display" style="padding:14px 18px;">
             <div class="stock-row">
-              <span class="stock-dot ${extras.stock <= 5 ? 'low' : 'ok'}"></span>
-              ${extras.stock <= 5
-                ? `<span style="color:var(--red);font-weight:600;">Últimas ${extras.stock} unidade${extras.stock > 1 ? 's' : ''} disponível${extras.stock > 1 ? 'is' : ''}!</span>`
-                : `<span style="color:var(--green);">Em estoque — ${extras.stock} disponível${extras.stock > 1 ? 'is' : ''}</span>`}
+              ${isUnavailable
+                ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Produto esgotado</span>`
+                : extras.stock <= 5
+                  ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Últimas ${extras.stock} unidade${extras.stock > 1 ? 's' : ''} disponível${extras.stock > 1 ? 'is' : ''}!</span>`
+                  : `<span class="stock-dot ok"></span><span style="color:var(--green);">Em estoque — ${extras.stock} disponível${extras.stock > 1 ? 'is' : ''}</span>`}
             </div>
           </div>
 
           <div class="card">
             <div class="actions-grid">
-              <button class="btn btn-secondary" onclick="buyNow('${product.id}', this)">
+              ${isUnavailable
+                ? `<button class="btn btn-secondary" disabled style="opacity:.6;cursor:not-allowed;grid-column:1/-1;">Produto Esgotado</button>`
+                : `<button class="btn btn-secondary" onclick="buyNow('${product.id}', this)">
                 ${IC.buy} Comprar Agora
               </button>
               <button class="btn btn-ml-add" onclick="addToCart('${product.id}', this)">
                 ${IC.cart} Adicionar ao Carrinho
-              </button>
+              </button>`}
             </div>
             <div id="urgency-widgets"></div>
             <div id="view-counter" role="status" aria-live="polite">

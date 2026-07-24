@@ -310,6 +310,14 @@ const detectCategory = (product) => {
   for (const cat of LINGERIE_CATEGORIES) {
     if (cat.keywords.some(kw => name.includes(kw))) return cat.key;
   }
+  // Nome sozinho não bateu — tenta de novo com model/description/specs antes de cair em "outros"
+  const specsText = product.specs && typeof product.specs === 'object'
+    ? Object.values(product.specs).join(' ')
+    : '';
+  const fallbackText = `${product.model || ''} ${product.description || ''} ${specsText}`.toLowerCase();
+  for (const cat of LINGERIE_CATEGORIES) {
+    if (cat.keywords.some(kw => fallbackText.includes(kw))) return cat.key;
+  }
   return 'outros';
 };
 

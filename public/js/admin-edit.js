@@ -149,7 +149,13 @@
             <label>${lbl('MODELO')}<input id="ae-f-model" style="${f()}" placeholder="iPhone 15 Pro Max"></label>
             <label>${lbl('COR')}<input id="ae-f-color" style="${f()}" placeholder="Preto Titânio"></label>
             <label>${lbl('ARMAZENAMENTO')}<input id="ae-f-storage" style="${f()}" placeholder="256GB"></label>
-            <label>${lbl('ESTOQUE')}<input id="ae-f-stock" type="number" style="${f()}" placeholder="1"></label>
+            <label>${lbl('ESTOQUE')}
+              <div style="display:flex;gap:4px;">
+                <input id="ae-f-stock" type="number" style="${f()}" placeholder="1">
+                <button type="button" title="Marcar esgotado" onclick="document.getElementById('ae-f-stock').value=0" style="${btn('#fee2e2', '#991b1b', 'padding:6px 8px;font-size:11px;white-space:nowrap;')}">Esgotado</button>
+                <button type="button" title="Repor 1 unidade" onclick="document.getElementById('ae-f-stock').value=1" style="${btn('#dcfce7', '#166534', 'padding:6px 8px;font-size:11px;white-space:nowrap;')}">Repor</button>
+              </div>
+            </label>
             <label>${lbl('CONDIÇÃO')}<select id="ae-f-condition" style="${f()}"><option>Novo</option><option>Seminovo</option><option>Usado</option></select></label>
             <label>${lbl('VENDEDOR')}<input id="ae-f-seller" style="${f()}" placeholder="Apple Store"></label>
             <label>${lbl('AVALIAÇÃO (0–5)')}<input id="ae-f-rating" type="number" step="0.1" min="0" max="5" style="${f()}" placeholder="5.0"></label>

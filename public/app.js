@@ -359,11 +359,13 @@ const _buildProductCardHTML = (product) => {
   const precoOriginal = product.price;
   const precoFinal = precoOriginal * (1 - descontoHoje / 100);
   const isIphone = !!(product.name && product.name.toLowerCase().includes('iphone'));
+  const isUnavailable = product.sold === true || Number(product.stock) <= 0;
 
-  return `<section class="olx-adcard" data-product-id="${product.id}">
+  return `<section class="olx-adcard" data-product-id="${product.id}" style="${isUnavailable ? 'opacity:.6;' : ''}">
 
   <div class="olx-adcard__media">
 
+      ${isUnavailable ? `<div style="position:absolute;top:0;right:0;background:#475569;color:#fff;padding:2px 6px;font-size:8px;font-weight:800;letter-spacing:.05em;border-radius:0 0 0 4px;z-index:2;">ESGOTADO</div>` : ''}
       ${isIphone ? `<div class="loja-oficial-badge">${ICONS.smartphone} LOJA OFICIAL APPLE</div>` : ''}
 
       <button
@@ -424,14 +426,16 @@ const _buildProductCardHTML = (product) => {
         <p class="olx-adcard__date">Envio imediato</p>
       </div>
 
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;margin-top:4px;">
+      ${!isUnavailable ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;margin-top:4px;">
         <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${stock <= 5 ? '#DC2626' : '#16A34A'};flex-shrink:0;"></span>
         <span style="color:${stock <= 5 ? '#DC2626' : '#475569'};">${stock <= 5 ? `Últimas ${stock} unidades!` : `${stock} unidades em estoque`}</span>
-      </div>
+      </div>` : ''}
 
       <div class="olx-adcard__actions">
-        <button class="button button-primary" type="button" onclick="buyNow('${product.id}', this)">Comprar Agora</button>
-        <button class="button button-secondary" type="button" onclick="addToCart('${product.id}', this)">Adicionar ao Carrinho</button>
+        ${isUnavailable
+          ? `<button class="button button-primary" type="button" disabled style="opacity:.6;cursor:not-allowed;">Esgotado</button>`
+          : `<button class="button button-primary" type="button" onclick="buyNow('${product.id}', this)">Comprar Agora</button>
+        <button class="button button-secondary" type="button" onclick="addToCart('${product.id}', this)">Adicionar ao Carrinho</button>`}
       </div>
 
   </div>
@@ -688,6 +692,51 @@ function showNotification(message) {
 
 // Pré-carrega todos os catálogos sequencialmente em background
 // Android primeiro (maior catálogo e mais clicado), 150ms entre loads
+// Clique num botão de categoria (estático ou gerado dinamicamente): mesmo comportamento em ambos os casos
+const selectCategory = (catKey) => {
+  document.querySelectorAll('.categories .cat-item').forEach(b => b.classList.toggle('active', b.dataset.catalog === catKey));
+  if (filterModel) filterModel.value = '';
+  fetchProducts();
+};
+
+// Cria um botão de categoria + link de drawer para uma categoria que apareceu nos dados
+// mas não existe no HTML estático (evita precisar editar index.html a cada categoria nova)
+const _createDynamicCategoryButton = (cat) => {
+  // Registra a categoria nova nos mapas usados por fetchProducts/loadCatalog — sem isso o clique
+  // no botão faria fetch(undefined) e voltaria vazio
+  CATALOGS[cat.key] = `/api/products?category=${cat.key}`;
+  CATALOG_LABELS[cat.key] = cat.label;
+
+  const catsWrap = document.querySelector('.categories');
+  if (catsWrap && !catsWrap.querySelector(`.cat-item[data-catalog="${cat.key}"]`)) {
+    const btn = document.createElement('div');
+    btn.className = 'cat-item';
+    btn.dataset.catalog = cat.key;
+    btn.innerHTML = `<div class="cat-item__icon" style="background:linear-gradient(135deg,#F0F0F0,#DCDCDC);">🛍️</div><span class="cat-item__name">${cat.label}</span>`;
+    btn.addEventListener('click', () => selectCategory(cat.key));
+    catsWrap.appendChild(btn);
+  }
+
+  const drawerSection = document.querySelector('.drawer-section .drawer-link[data-catalog]')?.closest('.drawer-section');
+  if (drawerSection && !drawerSection.querySelector(`.drawer-link[data-catalog="${cat.key}"]`)) {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'drawer-link';
+    link.dataset.catalog = cat.key;
+    link.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M1.05 12H7M17.01 12h5.95M12 1.05V7M12 17.01V22.96"/></svg>${cat.label}`;
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const sideDrawer = document.getElementById('side-drawer');
+      const overlay = document.getElementById('drawer-overlay');
+      if (sideDrawer) sideDrawer.classList.remove('open');
+      if (overlay) overlay.classList.remove('open');
+      document.body.style.overflow = '';
+      selectCategory(cat.key);
+    });
+    drawerSection.appendChild(link);
+  }
+};
+
 const initCategories = async () => {
   try {
     const res = await fetch('/api/products/categories');
@@ -699,6 +748,12 @@ const initCategories = async () => {
     });
     document.querySelectorAll('.drawer-link[data-catalog]').forEach(link => {
       if (!catKeys.has(link.dataset.catalog)) link.style.display = 'none';
+    });
+    // Categorias que vieram da API mas não existem no HTML estático (ex: categoria nova detectada nos dados)
+    categories.forEach(cat => {
+      if (!document.querySelector(`.categories .cat-item[data-catalog="${cat.key}"]`)) {
+        _createDynamicCategoryButton(cat);
+      }
     });
     const activeCat = document.querySelector('.categories .cat-item.active');
     if (activeCat && !catKeys.has(activeCat.dataset.catalog)) {
