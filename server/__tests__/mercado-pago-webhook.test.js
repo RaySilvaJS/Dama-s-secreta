@@ -82,6 +82,10 @@ function mockGet(fn) {
   mercadopago.getPaymentClient = () => ({ get: fn, create: async () => { throw new Error('não usado neste teste'); } });
 }
 
+function mockOrderGet(fn) {
+  mercadopago.getOrderClient = () => ({ get: fn });
+}
+
 test('webhook rejeita assinatura ausente', async () => {
   const r = await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=123&type=payment`, { method: 'POST', headers: { 'x-request-id': 'req-1' } });
   assert.equal(r.status, 401);
@@ -193,10 +197,131 @@ test('webhook não aprova pedido quando o valor não confere com o esperado', as
   assert.equal(saved.status, 'pending_payment'); // não deve ter sido marcado como aprovado
 });
 
-test('webhook ignora tópicos diferentes de payment', async () => {
+test('webhook ignora tópicos diferentes de payment/order', async () => {
   const r = await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=123&type=merchant_order`, {
     method: 'POST',
     headers: { 'x-signature': buildSignature('123', 'req-topic', process.env.MERCADO_PAGO_WEBHOOK_SECRET), 'x-request-id': 'req-topic' },
   });
   assert.equal(r.status, 200);
+});
+
+// ── GET de diagnóstico ───────────────────────────────────────────────────────
+
+test('GET /api/webhooks/mercado-pago retorna diagnóstico sem expor credenciais', async () => {
+  const r = await fetch(`${baseUrl}/api/webhooks/mercado-pago`);
+  const data = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(data.status, 'online');
+  assert.equal(data.configured, true);
+  assert.equal(JSON.stringify(data).includes(process.env.MERCADO_PAGO_ACCESS_TOKEN), false);
+  assert.equal(JSON.stringify(data).includes(process.env.MERCADO_PAGO_WEBHOOK_SECRET), false);
+});
+
+// ── Tópico "order" (Orders API) ─────────────────────────────────────────────
+
+test('webhook de order (Orders API) aprova o pedido a partir de status "processed"', async () => {
+  const order = seedOrder({ amountExpected: 300, currency: 'BRL' });
+  const dataId = 'ORD01JQ4S4KY8HWQ6NA5PXB65B3D3';
+  const requestId = 'req-order-approved';
+  const signature = buildSignature(dataId, requestId, process.env.MERCADO_PAGO_WEBHOOK_SECRET);
+
+  mockOrderGet(async ({ id }) => ({
+    id,
+    status: 'processed',
+    status_detail: 'accredited',
+    total_amount: '300.00',
+    currency: 'BRL',
+    external_reference: order.externalReference,
+    transactions: {
+      payments: [
+        { id: 'PAY01JS2V6CM8KJ0EC4H504R7YE34', status: 'processed', status_detail: 'accredited', amount: '300.00', payment_method: { id: 'pix', type: 'bank_transfer' } },
+      ],
+    },
+  }));
+
+  const r = await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataId}&type=order`, {
+    method: 'POST',
+    headers: { 'x-signature': signature, 'x-request-id': requestId, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'order.updated', type: 'order', data: { id: dataId } }),
+  });
+  const data = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(data.processed, true);
+
+  const saved = loadOrders().find(o => o.id === order.id);
+  assert.equal(saved.status, 'approved');
+  assert.equal(saved.mpOrderId, dataId);
+  assert.equal(saved.mpPaymentId, 'PAY01JS2V6CM8KJ0EC4H504R7YE34');
+  assert.equal(saved.mpPaymentMethodId, 'pix');
+  assert.equal(saved.amountConfirmed, 300);
+  assert.ok(saved.paidAt);
+});
+
+test('webhook de order mapeia "action_required" para pending e "failed" para rejected', async () => {
+  const orderPending = seedOrder({ amountExpected: 40 });
+  const dataIdPending = 'ORD-pending-1';
+  const sigPending = buildSignature(dataIdPending, 'req-order-pending', process.env.MERCADO_PAGO_WEBHOOK_SECRET);
+  mockOrderGet(async ({ id }) => ({
+    id, status: 'action_required', status_detail: 'waiting_payment', total_amount: '40.00', currency: 'BRL',
+    external_reference: orderPending.externalReference, transactions: { payments: [] },
+  }));
+  await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataIdPending}&type=order`, {
+    method: 'POST', headers: { 'x-signature': sigPending, 'x-request-id': 'req-order-pending' },
+  });
+  assert.equal(loadOrders().find(o => o.id === orderPending.id).status, 'pending');
+
+  const orderFailed = seedOrder({ amountExpected: 40 });
+  const dataIdFailed = 'ORD-failed-1';
+  const sigFailed = buildSignature(dataIdFailed, 'req-order-failed', process.env.MERCADO_PAGO_WEBHOOK_SECRET);
+  mockOrderGet(async ({ id }) => ({
+    id, status: 'failed', status_detail: 'cc_rejected_other_reason', total_amount: '40.00', currency: 'BRL',
+    external_reference: orderFailed.externalReference, transactions: { payments: [] },
+  }));
+  await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataIdFailed}&type=order`, {
+    method: 'POST', headers: { 'x-signature': sigFailed, 'x-request-id': 'req-order-failed' },
+  });
+  assert.equal(loadOrders().find(o => o.id === orderFailed.id).status, 'rejected');
+});
+
+test('webhook de order não aprova quando o valor total diverge do esperado', async () => {
+  const order = seedOrder({ amountExpected: 999 });
+  const dataId = 'ORD-mismatch-1';
+  const signature = buildSignature(dataId, 'req-order-mismatch', process.env.MERCADO_PAGO_WEBHOOK_SECRET);
+
+  mockOrderGet(async ({ id }) => ({
+    id, status: 'processed', status_detail: 'accredited', total_amount: '1.00', currency: 'BRL',
+    external_reference: order.externalReference, transactions: { payments: [] },
+  }));
+
+  const r = await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataId}&type=order`, {
+    method: 'POST',
+    headers: { 'x-signature': signature, 'x-request-id': 'req-order-mismatch' },
+  });
+  const data = await r.json();
+  assert.equal(data.processed, false);
+  assert.equal(data.reason, 'amount_mismatch');
+  assert.equal(loadOrders().find(o => o.id === order.id).status, 'pending_payment');
+});
+
+test('webhook de order é idempotente para a mesma notificação', async () => {
+  const order = seedOrder({ amountExpected: 60 });
+  const dataId = 'ORD-dup-1';
+  const signature = buildSignature(dataId, 'req-order-dup', process.env.MERCADO_PAGO_WEBHOOK_SECRET);
+
+  mockOrderGet(async ({ id }) => ({
+    id, status: 'processed', status_detail: 'accredited', total_amount: '60.00', currency: 'BRL',
+    external_reference: order.externalReference, transactions: { payments: [] },
+  }));
+
+  await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataId}&type=order`, {
+    method: 'POST', headers: { 'x-signature': signature, 'x-request-id': 'req-order-dup' },
+  });
+  const second = await fetch(`${baseUrl}/api/webhooks/mercado-pago?data.id=${dataId}&type=order`, {
+    method: 'POST', headers: { 'x-signature': signature, 'x-request-id': 'req-order-dup' },
+  });
+  const secondData = await second.json();
+  assert.equal(secondData.duplicate, true);
+
+  const saved = loadOrders().find(o => o.id === order.id);
+  assert.equal(saved.auditLog.filter(l => l.type === 'webhook_processed').length, 1);
 });

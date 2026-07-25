@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedAddressId = null;
   let addresses         = [];
   let shippingData      = null;
-  let payMethod         = 'pix';
+  let payMethod         = 'mercadopago'; // único método de pagamento disponível no checkout
   let couponDiscount    = 0;
   let subtotal          = orderItems.reduce((s, i) => s + i.preco * i.quantidade, 0);
   const insuranceAmt    = insurance ? insurance.price : 0;
@@ -57,10 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const insRow        = $('co-insurance-row');
   const insLabel      = $('co-insurance-label');
   const insVal        = $('co-insurance-val');
-  const pixRow        = $('co-pix-row');
-  const pixVal        = $('co-pix-val');
-  const pixBanner     = $('co-pix-disc-banner');
-  const pixEconomy    = $('co-pix-economy');
   const savingsLine   = $('co-savings-line');
   const savingsAmt    = $('co-savings-amt');
 
@@ -522,40 +518,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // ── PIX Countdown ─────────────────────────────────────────────────────────────
-  function startPixCountdown() {
-    const el = $('co-pix-countdown');
-    if (!el) return;
-    // 15 min = 900 seg
-    const endKey = 'pix-countdown-end';
-    let endTime = parseInt(sessionStorage.getItem(endKey) || '0', 10);
-    if (!endTime || endTime < Date.now()) {
-      endTime = Date.now() + 15 * 60 * 1000;
-      sessionStorage.setItem(endKey, endTime);
-    }
-
-    function tick() {
-      const remaining = Math.max(0, endTime - Date.now());
-      const m = Math.floor(remaining / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      el.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-      if (remaining <= 0) {
-        el.textContent = '00:00';
-        const bar = $('co-pix-countdown-bar');
-        if (bar) bar.style.display = 'none';
-        return;
-      }
-      setTimeout(tick, 1000);
-    }
-    tick();
-  }
-
   // ── Totals ────────────────────────────────────────────────────────────────────
   function updateTotal() {
     const efectiveFrete = hasFreteGratis || couponFreeShipping;
     const frete   = shippingData ? (efectiveFrete ? 0 : shippingData.price) : null;
-    const pixDisc = payMethod === 'pix' ? Math.round((subtotal + insuranceAmt) * 0.05 * 100) / 100 : 0;
-    const total   = subtotal + insuranceAmt + (frete || 0) - couponDiscount - pixDisc;
+    const total   = subtotal + insuranceAmt + (frete || 0) - couponDiscount;
 
     subtotalEl.textContent = fmt(subtotal);
 
@@ -565,16 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
       insVal.textContent   = fmt(insuranceAmt);
     } else {
       insRow.style.display = 'none';
-    }
-
-    if (payMethod === 'pix') {
-      pixRow.style.display = '';
-      pixVal.textContent = '- ' + fmt(pixDisc);
-      pixBanner.classList.add('visible');
-      if (pixEconomy) pixEconomy.textContent = fmt(pixDisc);
-    } else {
-      pixRow.style.display = 'none';
-      pixBanner.classList.remove('visible');
     }
 
     if (frete === null) {
@@ -590,44 +547,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     totalEl.textContent = fmt(Math.max(0, total));
 
-    const saved = pixDisc + couponDiscount;
-    if (saved > 0.5) {
+    if (couponDiscount > 0.5) {
       savingsLine.style.display = 'flex';
-      savingsAmt.textContent = fmt(saved);
+      savingsAmt.textContent = fmt(couponDiscount);
     } else {
       savingsLine.style.display = 'none';
     }
 
-    updateInstallments(Math.max(0, total));
     refreshPayBtn();
 
-    if (payMethod === 'mercadopago' && window.MPCheckout) {
+    if (window.MPCheckout) {
       window.MPCheckout.refresh(getMpContext());
     }
   }
 
-  function updateInstallments(total) {
-    const sel = $('card-installments');
-    if (!sel || total <= 0) return;
-    sel.innerHTML = '';
-    const max = Math.min(12, Math.floor(total / 50));
-    for (let i = 1; i <= Math.max(1, max); i++) {
-      const opt = document.createElement('option');
-      if (i <= 3) {
-        opt.textContent = `${i}x de ${fmt(total / i)} sem juros`;
-      } else {
-        const rate = 0.0299;
-        const pmt  = total * rate / (1 - Math.pow(1 + rate, -i));
-        opt.textContent = `${i}x de ${fmt(Math.round(pmt * 100) / 100)} com juros`;
-      }
-      opt.value = i;
-      sel.appendChild(opt);
-    }
-  }
-
+  // payBtn permanece sempre oculto (o Mercado Pago é o único método, com botão próprio
+  // dentro do Brick) — mantido só para preencher o hint de dados pendentes, se algum.
   function refreshPayBtn() {
     const ready = orderItems.length > 0 && selectedAddressId && shippingData;
-    payBtn.disabled = !ready;
+    if (payBtn) payBtn.disabled = !ready;
 
     const hintEl = $('co-btn-hint');
     if (!ready && hintEl) {
@@ -640,23 +578,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (hintEl) {
       hintEl.style.display = 'none';
     }
-
-    if (!payBtn.disabled) {
-      payBtn.style.background = '#16A34A';
-      payBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Pagar com PIX — 5% OFF`;
-    } else {
-      payBtn.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Finalizar Compra com Segurança`;
-    }
   }
 
   // ── Mercado Pago Payment Brick — contexto usado por mercadopago-checkout.js ───
   function getMpContext() {
+    const address = addresses.find(a => a.id === selectedAddressId);
     return {
       items: orderItems.map(i => ({ id: i.id, quantidade: i.quantidade })),
+      // Dados só para exibição na etapa de revisão — o valor cobrado nunca vem daqui
+      displayItems: orderItems.map(i => ({ nome: i.nome, preco: i.preco, quantidade: i.quantidade })),
+      addressLine: address ? addrLine(address) : '',
       addressId: selectedAddressId,
       couponCode: appliedCouponCode || null,
       shippingCost: shippingData ? ((hasFreteGratis || couponFreeShipping) ? 0 : shippingData.price) : 0,
@@ -673,67 +604,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   window.__getMpContext = getMpContext;
 
-  // ── Payment method selection ──────────────────────────────────────────────────
-  window.selectPayMethod = async function(method) {
-    if (method === 'mercadopago') {
-      if (!orderItems.length || !selectedAddressId || !shippingData) {
-        alert('Selecione o endereço de entrega e aguarde o cálculo do frete antes de escolher esta forma de pagamento.');
-        return;
-      }
-      const authed = await ensureAuth();
-      if (!authed || !authSession?.token) return;
+  // ── Payment method selection ────────────────────────────────────────────────
+  // Mercado Pago é o único método disponível — a função existe (e continua sendo
+  // chamada pelo onclick do card) para reaproveitar a ativação/desativação do Brick.
+  window.selectPayMethod = async function() {
+    if (!orderItems.length || !selectedAddressId || !shippingData) {
+      alert('Selecione o endereço de entrega e aguarde o cálculo do frete antes de continuar.');
+      return;
     }
+    const authed = await ensureAuth();
+    if (!authed || !authSession?.token) return;
 
-    payMethod = method;
-    $('co-pix-opt').classList.toggle('selected', method === 'pix');
-    $('co-card-opt').classList.toggle('selected', method === 'card');
-    $('co-pix-opt').querySelector('input').checked  = method === 'pix';
-    $('co-card-opt').querySelector('input').checked = method === 'card';
+    payMethod = 'mercadopago';
     const mpOpt = $('co-mp-opt');
     if (mpOpt) {
-      mpOpt.classList.toggle('selected', method === 'mercadopago');
-      mpOpt.querySelector('input').checked = method === 'mercadopago';
+      mpOpt.classList.add('selected');
+      const input = mpOpt.querySelector('input');
+      if (input) input.checked = true;
     }
-    const form = $('co-card-form');
-    form.classList.toggle('visible', method === 'card');
 
     const mpWrap = $('co-mp-brick-wrap');
-    if (mpWrap) mpWrap.style.display = method === 'mercadopago' ? 'block' : 'none';
-    if (payBtn) payBtn.style.display = method === 'mercadopago' ? 'none' : '';
+    if (mpWrap) mpWrap.style.display = 'block';
+    if (payBtn) payBtn.style.display = 'none';
     const btnHint = $('co-btn-hint');
-    if (btnHint && method === 'mercadopago') btnHint.style.display = 'none';
+    if (btnHint) btnHint.style.display = 'none';
 
-    if (window.MPCheckout) {
-      if (method === 'mercadopago') window.MPCheckout.activate(getMpContext());
-      else window.MPCheckout.deactivate();
-    }
+    if (window.MPCheckout) window.MPCheckout.activate(getMpContext());
 
     updateTotal();
   };
-
-  // ── Card form inputs ──────────────────────────────────────────────────────────
-  const cardNumber = $('card-number');
-  if (cardNumber) {
-    cardNumber.addEventListener('input', (e) => {
-      let v = e.target.value.replace(/\D/g, '').slice(0, 16);
-      v = v.replace(/(.{4})/g, '$1 ').trim();
-      e.target.value = v;
-      refreshPayBtn();
-    });
-  }
-  const cardExpiry = $('card-expiry');
-  if (cardExpiry) {
-    cardExpiry.addEventListener('input', (e) => {
-      let v = e.target.value.replace(/\D/g, '');
-      if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2, 4);
-      e.target.value = v;
-      refreshPayBtn();
-    });
-  }
-  ['card-name', 'card-cvv'].forEach(id => {
-    const el = $(id);
-    if (el) el.addEventListener('input', refreshPayBtn);
-  });
 
   // ── Coupon ────────────────────────────────────────────────────────────────────
   let appliedCouponCode = null;
@@ -816,7 +715,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Build summary ─────────────────────────────────────────────────────────────
   function buildSummary(frete, prazo) {
-    const pixDisc = payMethod === 'pix' ? Math.round((subtotal + insuranceAmt) * 0.05 * 100) / 100 : 0;
     const efectiveFrete = (hasFreteGratis || couponFreeShipping) ? 0 : (frete || 0);
     return {
       produto: orderItems.map(item => ({
@@ -837,8 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
       descontoCupom: couponDiscount,
       couponCode: appliedCouponCode || null,
       couponFreeShipping,
-      descontoPix: pixDisc,
-      total_final: Math.max(0, subtotal + insuranceAmt + efectiveFrete - couponDiscount - pixDisc),
+      total_final: Math.max(0, subtotal + insuranceAmt + efectiveFrete - couponDiscount),
       hasFreteGratis: hasFreteGratis || couponFreeShipping,
       source,
       paymentMethod: payMethod,
@@ -939,68 +836,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Pay button ────────────────────────────────────────────────────────────────
-  if (payBtn) {
-    payBtn.addEventListener('click', async () => {
-      if (!selectedAddressId) { alert('Salve o endereço de entrega para continuar.'); return; }
-      if (!shippingData)      { alert('Aguarde o cálculo do frete.'); return; }
-
-      // Se não está logado, coleta dados do guest primeiro
-      const authed = await ensureAuth();
-      if (!authed) return;
-
-      // Se guest acabou de criar conta, precisa salvar o endereço
-      if (!authSession?.token) return;
-
-      const summary = buildSummary(hasFreteGratis ? 0 : shippingData.price, shippingData.deadline);
-      localStorage.setItem('checkout-summary', JSON.stringify(summary));
-
-      const cardInfo = payMethod === 'card' ? {
-        cardNumber:   $('card-number')?.value.replace(/\s/g, ''),
-        cardName:     $('card-name')?.value.trim(),
-        cardExpiry:   $('card-expiry')?.value.trim(),
-        cardCvv:      $('card-cvv')?.value.trim(),
-        cardLast4:    $('card-number')?.value.replace(/\s/g, '').slice(-4),
-        installments: parseInt($('card-installments')?.value || '1', 10),
-      } : null;
-
-      const payload = {
-        productId:     summary.produto.length === 1 ? summary.produto[0].id : null,
-        productName:   summary.produto.map(p => p.nome).join(', '),
-        amount:        summary.total_final,
-        userId:        authSession ? authSession.id : null,
-        addressId:     selectedAddressId,
-        paymentMethod: payMethod,
-        couponCode:    appliedCouponCode || null,
-        ...(cardInfo || {}),
-        seguro:        summary.seguro || 0,
-        seguroLabel:   summary.seguroLabel || null,
-      };
-
-      payBtn.disabled = true;
-      payBtn.innerHTML = '<span class="co-spinner"></span> Processando...';
-
-      try {
-        const res  = await fetch('/api/payment/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-auth-token': authSession ? authSession.token : '' },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!data.success || !data.paymentId) throw new Error(data.error || 'Erro ao gerar pagamento.');
-
-        const dest = payMethod === 'card'
-          ? 'pagamento.html?id=' + encodeURIComponent(data.paymentId) + '&method=cartao'
-          : 'pagamento.html?id=' + encodeURIComponent(data.paymentId);
-        window.location.href = dest;
-      } catch (err) {
-        console.error(err);
-        payBtn.disabled = false;
-        refreshPayBtn();
-        alert(err.message || 'Erro ao processar pedido. Tente novamente.');
-      }
-    });
-  }
+  // Nota: o botão fixo (co-pay-btn) fica sempre oculto — a cobrança agora acontece
+  // pelo Payment Brick (Mercado Pago), que tem seu próprio botão de envio.
+  // O fluxo antigo (POST /api/payment/generate, PIX manual/cartão via WhatsApp) foi removido daqui.
 
   // ── Init ──────────────────────────────────────────────────────────────────────
   renderItems();
@@ -1008,5 +846,4 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCepAutoFill();
   loadAddresses();
   updateTotal();
-  startPixCountdown();
 });

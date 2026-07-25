@@ -157,6 +157,7 @@ router.post('/orders', rateLimit(20, 5 * 60 * 1000), (req, res) => {
     currency: 'BRL',
     status: 'pending_payment', // pending_payment | pending | in_process | approved | rejected | cancelled | refunded | charged_back
     mpPaymentId: null,
+    mpOrderId: null, // ID da Order (Orders API, formato "ORD...") — distinto do ID de pagamento acima
     mpPaymentMethodId: null,
     mpPaymentTypeId: null,
     mpStatusDetail: null,
@@ -234,7 +235,12 @@ router.post('/', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
     statement_descriptor: 'DAMASSECRETA',
     payer: { email: payerEmail, identification: payerIdentification },
   };
-  if (token) paymentBody.token = token;
+  if (token) {
+    paymentBody.token = token;
+    // Habilita o fluxo 3DS 2.0 do Mercado Pago para pagamentos com cartão — o emissor
+    // decide se pede o desafio (challenge) com base no risco da transação.
+    paymentBody.three_d_secure_mode = 'optional';
+  }
   if (issuerId) paymentBody.issuer_id = issuerId;
 
   let mpResponse;
@@ -272,6 +278,9 @@ router.post('/', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
   saveMpOrders(orders);
 
   const txData = mpResponse.point_of_interaction && mpResponse.point_of_interaction.transaction_data;
+  // Presente quando o emissor pede autenticação 3DS (status pending / status_detail pending_challenge).
+  // O Status Screen Brick usa esses dois campos para renderizar o desafio do banco.
+  const threeDs = mpResponse.three_ds_info;
 
   res.json({
     success: true,
@@ -289,6 +298,9 @@ router.post('/', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
       },
     } : {}),
     ...(txData && txData.ticket_url && !txData.qr_code ? { ticketUrl: txData.ticket_url } : {}),
+    ...(threeDs && threeDs.external_resource_url ? {
+      threeDsInfo: { externalResourceURL: threeDs.external_resource_url, creq: threeDs.creq || null },
+    } : {}),
   });
 });
 

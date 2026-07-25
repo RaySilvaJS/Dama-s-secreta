@@ -191,6 +191,73 @@ test('POST / — pagamento pendente (Pix) retorna QR code e código copia-e-cola
   assert.ok(data.pix.qrCodeBase64);
 });
 
+test('POST / — envia three_d_secure_mode ao Mercado Pago quando o pagamento usa token de cartão', async () => {
+  const { data: order } = await createOrder(TEST_TOKEN, [{ id: TEST_PRODUCT_ID, quantidade: 1 }]);
+  let sentBody = null;
+  mockPaymentClient({
+    create: async ({ body }) => {
+      sentBody = body;
+      return { id: 555010, status: 'approved', status_detail: 'accredited', payment_method_id: 'visa', transaction_amount: body.transaction_amount };
+    },
+  });
+
+  await fetch(`${baseUrl}/api/payments/mercado-pago`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': TEST_TOKEN },
+    body: JSON.stringify({ orderId: order.orderId, formData: { payment_method_id: 'visa', token: 'tok-3ds', installments: 1 } }),
+  });
+
+  assert.equal(sentBody.three_d_secure_mode, 'optional');
+});
+
+test('POST / — não envia three_d_secure_mode para pagamentos sem token (ex.: Pix)', async () => {
+  const { data: order } = await createOrder(TEST_TOKEN, [{ id: TEST_PRODUCT_ID, quantidade: 1 }]);
+  let sentBody = null;
+  mockPaymentClient({
+    create: async ({ body }) => {
+      sentBody = body;
+      return { id: 555011, status: 'pending', status_detail: 'pending_waiting_transfer', payment_method_id: 'pix', transaction_amount: body.transaction_amount };
+    },
+  });
+
+  await fetch(`${baseUrl}/api/payments/mercado-pago`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': TEST_TOKEN },
+    body: JSON.stringify({ orderId: order.orderId, formData: { payment_method_id: 'pix' } }),
+  });
+
+  assert.equal(sentBody.three_d_secure_mode, undefined);
+});
+
+test('POST / — repassa threeDsInfo (external_resource_url/creq) quando o emissor exige desafio 3DS', async () => {
+  const { data: order } = await createOrder(TEST_TOKEN, [{ id: TEST_PRODUCT_ID, quantidade: 1 }]);
+  mockPaymentClient({
+    create: async ({ body }) => ({
+      id: 555012,
+      status: 'pending',
+      status_detail: 'pending_challenge',
+      payment_method_id: 'visa',
+      transaction_amount: body.transaction_amount,
+      three_ds_info: {
+        external_resource_url: 'https://mercadopago.com/3ds/challenge/abc123',
+        creq: 'eyJhbGciOiJI...',
+      },
+    }),
+  });
+
+  const r = await fetch(`${baseUrl}/api/payments/mercado-pago`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-auth-token': TEST_TOKEN },
+    body: JSON.stringify({ orderId: order.orderId, formData: { payment_method_id: 'visa', token: 'tok-challenge', installments: 1 } }),
+  });
+  const data = await r.json();
+  assert.equal(data.status, 'pending');
+  assert.equal(data.statusDetail, 'pending_challenge');
+  assert.ok(data.threeDsInfo);
+  assert.equal(data.threeDsInfo.externalResourceURL, 'https://mercadopago.com/3ds/challenge/abc123');
+  assert.equal(data.threeDsInfo.creq, 'eyJhbGciOiJI...');
+});
+
 test('POST / — pagamento recusado retorna status rejected e status_detail', async () => {
   const { data: order } = await createOrder(TEST_TOKEN, [{ id: TEST_PRODUCT_ID, quantidade: 1 }]);
   mockPaymentClient({

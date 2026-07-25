@@ -558,28 +558,9 @@
     </div>
     <div class="co-card-body">
 
-      <!-- PIX -->
-      <div class="co-pay-opt selected" id="co-pix-opt" onclick="selectPayMethod('pix')">
-        <input type="radio" name="paymethod" value="pix" checked/>
-        <div class="co-pay-logo pix" style="font-size:13px;font-weight:900;letter-spacing:-.5px">PIX</div>
-        <div>
-          <div class="co-pay-label">PIX</div>
-          <div class="co-pay-sub">Pagamento instantâneo</div>
-        </div>
-        <div class="co-pay-badge">5% OFF</div>
-      </div>
-
-      <!-- Cartão (oculto: fluxo manual — em breve via gateway integrado) -->
-      <div id="co-card-opt" style="display:none;"><input type="radio" name="paymethod" value="card"/></div>
-      <div id="co-card-form" style="display:none;">
-        <input id="card-number" type="hidden"/><input id="card-name" type="hidden"/>
-        <input id="card-expiry" type="hidden"/><input id="card-cvv" type="hidden"/>
-        <select id="card-installments" style="display:none;"><option value="1">1x</option></select>
-      </div>
-
-      <!-- Mercado Pago — Cartão / Pix / Boleto via Payment Brick -->
-      <div class="co-pay-opt" id="co-mp-opt" onclick="selectPayMethod('mercadopago')">
-        <input type="radio" name="paymethod" value="mercadopago"/>
+      <!-- Mercado Pago — único método de pagamento (Cartão / Pix / Boleto via Payment Brick) -->
+      <div class="co-pay-opt selected" id="co-mp-opt" onclick="selectPayMethod('mercadopago')">
+        <input type="radio" name="paymethod" value="mercadopago" checked/>
         <div class="co-pay-logo" style="background:#009EE3;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.3px">MP</div>
         <div>
           <div class="co-pay-label">Cartão, Pix ou Boleto</div>
@@ -598,19 +579,29 @@
         </button>
       </div>
 
-      <!-- Desconto PIX visível -->
-      <div class="co-pix-disc" id="co-pix-disc-banner">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
-        💰 5% de desconto no PIX — você economiza <strong><span id="co-pix-economy"></span></strong>
-      </div>
-
-      <!-- Countdown PIX -->
-      <div id="co-pix-countdown-bar" style="background:linear-gradient(135deg,#065F46,#047857);color:#fff;border-radius:10px;padding:12px 16px;margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Desconto PIX reservado por:
+      <!-- Revisão e confirmação — mostrada antes de efetivar a cobrança no Mercado Pago -->
+      <div id="co-mp-review-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+          <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#1A0A12;">Revise seu pedido</h3>
+          <p style="margin:0 0 16px;font-size:12px;color:#6B7280;">Confira os dados antes de confirmar o pagamento.</p>
+          <div id="co-mp-review-items" style="display:grid;gap:6px;margin-bottom:14px;"></div>
+          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:#6B3A56;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Endereço de entrega</div>
+            <div id="co-mp-review-address" style="font-size:12px;color:#374151;line-height:1.5;"></div>
+          </div>
+          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:6px;">
+              <span>Forma de pagamento</span><strong id="co-mp-review-method"></strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1A0A12;">
+              <span>Total</span><span id="co-mp-review-total"></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button id="co-mp-review-cancel" type="button" style="flex:1;padding:13px;border:1.5px solid #F0D4E5;background:#fff;color:#6B3A56;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Voltar</button>
+            <button id="co-mp-review-confirm" type="button" style="flex:1;padding:13px;border:none;background:#16A34A;color:#fff;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Confirmar pagamento</button>
+          </div>
         </div>
-        <div style="font-size:20px;font-weight:900;letter-spacing:2px;font-variant-numeric:tabular-nums;" id="co-pix-countdown">15:00</div>
       </div>
 
     </div>
@@ -656,10 +647,6 @@
       <div class="co-sum-row">
         <span>Frete</span>
         <span class="co-sum-val" id="co-shipping-val">A calcular</span>
-      </div>
-      <div class="co-sum-row" id="co-pix-row" style="display:none">
-        <span>Desconto PIX (5%)</span>
-        <span class="co-sum-val" style="color:#059669" id="co-pix-val">- R$ 0,00</span>
       </div>
       <div class="co-sum-row total">
         <span>Total</span>

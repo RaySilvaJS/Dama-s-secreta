@@ -37,6 +37,63 @@
     return 'Pagamento não aprovado. Verifique os dados e tente novamente.';
   }
 
+  function formatBRL(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function paymentMethodLabel(selectedPaymentMethod, formData) {
+    const type = selectedPaymentMethod && selectedPaymentMethod.type;
+    const installments = formData && formData.installments;
+    if (type === 'bank_transfer') return 'Pix';
+    if (type === 'ticket') return 'Boleto';
+    if (type === 'wallet_purchase') return 'Conta Mercado Pago';
+    if (type === 'credit_card') return `Cartão de crédito${installments > 1 ? ' — ' + installments + 'x' : ''}`;
+    if (type === 'debit_card') return 'Cartão de débito';
+    return 'Mercado Pago';
+  }
+
+  // ── Etapa de revisão e confirmação ─────────────────────────────────────────
+  // Mostrada depois que o Brick tokeniza os dados (onSubmit) e antes de
+  // efetivamente criar a cobrança no backend — dá ao cliente a chance de
+  // conferir itens, endereço e forma de pagamento, e cancelar se quiser.
+  function showReviewModal({ methodLabel, totalLabel, items, addressLine }) {
+    return new Promise((resolve) => {
+      const modal = $('co-mp-review-modal');
+      const confirmBtn = $('co-mp-review-confirm');
+      const cancelBtn = $('co-mp-review-cancel');
+      if (!modal || !confirmBtn || !cancelBtn) { resolve(true); return; } // sem modal na página — não bloqueia o pagamento
+
+      const methodEl  = $('co-mp-review-method');
+      const totalEl   = $('co-mp-review-total');
+      const addrEl    = $('co-mp-review-address');
+      const itemsEl   = $('co-mp-review-items');
+      if (methodEl) methodEl.textContent = methodLabel || 'Mercado Pago';
+      if (totalEl)  totalEl.textContent  = totalLabel || '';
+      if (addrEl)   addrEl.textContent   = addressLine || 'Não informado';
+      if (itemsEl) {
+        itemsEl.innerHTML = (items || []).map((i) => `
+          <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#374151;">
+            <span>${i.quantidade}x ${escapeHtml(i.nome)}</span>
+            <span style="white-space:nowrap;">${formatBRL(i.preco * i.quantidade)}</span>
+          </div>`).join('');
+      }
+
+      modal.style.display = 'flex';
+
+      const cleanup = () => {
+        modal.style.display = 'none';
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+      };
+      const onConfirm = () => { cleanup(); resolve(true); };
+      const onCancel  = () => { cleanup(); resolve(false); };
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
   function showError(msg) {
     const el = $('co-mp-error');
     if (el) { el.textContent = msg; el.style.display = 'block'; }
@@ -141,35 +198,50 @@
             console.error('[MercadoPago Brick] onError', error);
             showError('Erro ao carregar o formulário de pagamento. Tente novamente.');
           },
-          onSubmit: ({ formData }) => {
+          onSubmit: ({ selectedPaymentMethod, formData }) => {
             if (submitting) return Promise.reject(new Error('already_submitting'));
-            submitting = true;
-            clearError();
-            return fetch('/api/payments/mercado-pago', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-auth-token': context.authToken },
-              body: JSON.stringify({ orderId: currentOrderId, formData }),
-            })
-              .then((r) => r.json().then((data) => ({ ok: r.ok, data })).catch(() => ({ ok: false, data: {} })))
-              .then(({ ok, data }) => {
-                submitting = false;
-                if (!ok || !data.success) {
-                  const msg = friendlyMessage(data);
-                  showError(msg);
-                  throw new Error(msg);
-                }
-                if (data.status === 'rejected') {
-                  const msg = friendlyMessage(data);
-                  showError(msg);
-                  throw new Error(msg);
-                }
-                if (context.onSuccess) context.onSuccess(data);
-                return undefined;
+
+            return showReviewModal({
+              methodLabel: paymentMethodLabel(selectedPaymentMethod, formData),
+              totalLabel: formatBRL(orderData.amount),
+              items: context.displayItems,
+              addressLine: context.addressLine,
+            }).then((confirmed) => {
+              if (!confirmed) {
+                // Cliente clicou em "Voltar" — não cobra nada, apenas devolve o Brick ao estado editável.
+                throw new Error('Revise os dados e confirme quando estiver pronto.');
+              }
+
+              submitting = true;
+              clearError();
+              return fetch('/api/payments/mercado-pago', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': context.authToken },
+                body: JSON.stringify({ orderId: currentOrderId, formData }),
               })
-              .catch((err) => {
-                submitting = false;
-                throw err;
-              });
+                .then((r) => r.json().then((data) => ({ ok: r.ok, data })).catch(() => ({ ok: false, data: {} })))
+                .then(({ ok, data }) => {
+                  submitting = false;
+                  if (!ok || !data.success) {
+                    const msg = friendlyMessage(data);
+                    showError(msg);
+                    throw new Error(msg);
+                  }
+                  if (data.status === 'rejected') {
+                    const msg = friendlyMessage(data);
+                    showError(msg);
+                    throw new Error(msg);
+                  }
+                  // approved / pending / in_process (inclui 3DS "pending_challenge") seguem para a
+                  // tela de resultado, que usa o Status Screen Brick para mostrar o desafio/QR/status.
+                  if (context.onSuccess) context.onSuccess(data);
+                  return undefined;
+                })
+                .catch((err) => {
+                  submitting = false;
+                  throw err;
+                });
+            });
           },
         },
       });

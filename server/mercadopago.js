@@ -13,7 +13,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { MercadoPagoConfig, Payment, WebhookSignatureValidator, InvalidWebhookSignatureError } = require('mercadopago');
+const { MercadoPagoConfig, Payment, Order, WebhookSignatureValidator, InvalidWebhookSignatureError } = require('mercadopago');
 
 const configPath = path.join(__dirname, 'data', 'config.json');
 const loadAppConfig = () => { try { return JSON.parse(fs.readFileSync(configPath, 'utf-8')); } catch { return {}; } };
@@ -84,6 +84,18 @@ function getPaymentClient() {
   return new Payment(config);
 }
 
+// Cliente da Orders API (POST/GET /v1/orders) — usado pelo webhook para consultar
+// o estado oficial de uma order (topic "order") direto no Mercado Pago.
+function getOrderClient() {
+  const { ok, creds } = checkConfig();
+  if (!ok) throw new Error('Mercado Pago não está configurado no servidor.');
+  const config = new MercadoPagoConfig({
+    accessToken: creds.accessToken,
+    options: { timeout: 15000 },
+  });
+  return new Order(config);
+}
+
 // Somente a Public Key pode ser exposta ao frontend.
 function getPublicKey() {
   const { creds } = getCreds();
@@ -114,6 +126,7 @@ module.exports = {
   getAppUrl() { return getCreds().creds.appUrl || ''; },
   getCredsSource() { return checkConfig().source; },
   getPaymentClient,
+  getOrderClient,
   getPublicKey,
   verifyWebhookSignature,
   InvalidWebhookSignatureError,
