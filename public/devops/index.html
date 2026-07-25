@@ -1153,6 +1153,48 @@ tbody tr:last-child td { border-bottom: none; }
         </div>
       </div>
 
+      <!-- Config Mercado Pago (Payment Brick) -->
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+          <h3 style="margin:0">💳 Mercado Pago — Cartão / Pix / Boleto</h3>
+          <span id="mp-status-badge" class="badge badge-yellow">Verificando...</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+          Credenciais usadas pelo Payment Brick no checkout. Se as variáveis de ambiente
+          <code>MERCADO_PAGO_*</code> estiverem definidas no <code>.env</code>, elas têm prioridade
+          sobre o que for salvo aqui. Use credenciais de <strong>teste</strong> (prefixo <code>TEST-</code>)
+          enquanto estiver testando.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              Access Token <span id="mp-src-accessToken" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="mp-access-token" type="password" class="input" style="width:100%" placeholder="TEST-... ou APP_USR-..." autocomplete="off"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              Public Key <span id="mp-src-publicKey" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="mp-public-key" type="text" class="input" style="width:100%" placeholder="TEST-... ou APP_USR-..." autocomplete="off"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              Chave secreta do Webhook <span id="mp-src-webhookSecret" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="mp-webhook-secret" type="password" class="input" style="width:100%" placeholder="Painel MP → Sua integração → Webhooks" autocomplete="off"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              URL do site (APP_URL) <span id="mp-src-appUrl" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="mp-app-url" type="text" class="input" style="width:100%" placeholder="https://seudominio.com"/>
+          </div>
+        </div>
+        <button class="btn btn-blue" style="margin-top:12px" onclick="saveMpCfg()">💾 Salvar Configuração Mercado Pago</button>
+        <div id="mp-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
+      </div>
+
       <!-- Gerador de QR Code PIX de Teste -->
       <div class="card" style="margin-bottom:20px">
         <h3>🧪 Gerar QR Code PIX de Teste</h3>
@@ -5042,7 +5084,7 @@ async function init() {
 let _finRefusingId = null;
 
 async function loadFinanceiro() {
-  await Promise.all([loadFinDashboard(), loadFinOrders(), loadPixCfgForm()]);
+  await Promise.all([loadFinDashboard(), loadFinOrders(), loadPixCfgForm(), loadMpCfgForm()]);
 }
 
 async function loadFinDashboard() {
@@ -5187,6 +5229,57 @@ async function savePixCfg() {
       fb.style.display = '';
       setTimeout(() => { if (fb) fb.style.display = 'none'; }, 3000);
     }
+  } catch(e) {
+    if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
+  }
+}
+
+// ── Configuração Mercado Pago (Payment Brick) ────────────────────────────────
+async function loadMpCfgForm() {
+  try {
+    const data = await api.get('/api/admin/mercadopago-config');
+    if (!data) return;
+    const panel = data.panel || {};
+    const src   = data.source || {};
+
+    const setField = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    setField('mp-access-token',   panel.accessToken);
+    setField('mp-public-key',     panel.publicKey);
+    setField('mp-webhook-secret', panel.webhookSecret);
+    setField('mp-app-url',        panel.appUrl);
+
+    const srcLabel = (s) => s === 'env' ? '<span style="color:var(--blue)">(via .env)</span>'
+      : s === 'panel' ? '<span style="color:var(--green)">(via painel)</span>'
+      : '<span style="color:var(--red)">(não definido)</span>';
+    ['accessToken','publicKey','webhookSecret','appUrl'].forEach((f) => {
+      const el = document.getElementById('mp-src-' + f);
+      if (el) el.innerHTML = srcLabel(src[f]);
+    });
+
+    const badge = document.getElementById('mp-status-badge');
+    if (badge) {
+      badge.textContent = data.configured ? '✓ Configurado' : '⚠ Incompleto';
+      badge.className = 'badge ' + (data.configured ? 'badge-green' : 'badge-yellow');
+    }
+  } catch {}
+}
+
+async function saveMpCfg() {
+  const accessToken   = document.getElementById('mp-access-token')?.value.trim();
+  const publicKey     = document.getElementById('mp-public-key')?.value.trim();
+  const webhookSecret = document.getElementById('mp-webhook-secret')?.value.trim();
+  const appUrl        = document.getElementById('mp-app-url')?.value.trim();
+  const fb = document.getElementById('mp-cfg-feedback');
+
+  try {
+    const r = await api.post('/api/admin/mercadopago-config', { accessToken, publicKey, webhookSecret, appUrl });
+    if (fb) {
+      fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
+      fb.textContent  = r?.ok ? '✓ Configuração salva! Já vale para o checkout, sem precisar reiniciar.' : (r?.error || 'Erro ao salvar.');
+      fb.style.display = '';
+      setTimeout(() => { if (fb) fb.style.display = 'none'; }, 4000);
+    }
+    await loadMpCfgForm();
   } catch(e) {
     if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
   }

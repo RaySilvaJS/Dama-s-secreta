@@ -17,6 +17,8 @@ const cors = require('cors');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const paymentRouter = require('./payment');
+const mercadoPagoOrdersRouter = require('./mercadoPagoOrders');
+const mercadoPagoWebhookRouter = require('./mercadoPagoWebhook');
 const adminRouter = require('./admin');
 const { loadConfig, loadSecurity, saveSecurity } = require('./admin');
 const { initWhatsApp, sendPaymentRequest } = require('./whatsapp');
@@ -165,6 +167,8 @@ app.use((req, res, next) => {
     if (!cfg.maintenance) return next();
     // Allow admin panel, admin API, and devops
     if (req.path.startsWith('/api/admin') || req.path.startsWith('/devops')) return next();
+    // Webhook do Mercado Pago precisa continuar recebendo notificações mesmo em manutenção
+    if (req.path.startsWith('/api/webhooks/mercado-pago')) return next();
     // Allow valid admin tokens
     const adminToken = req.headers['x-admin-token'] || req.query.adminToken;
     if (adminToken && adminToken === process.env.ADMIN_TOKEN) return next();
@@ -207,6 +211,8 @@ app.get('/data/:filename', (req, res, next) => {
 app.use(express.static(publicPath));
 app.use('/proofs', express.static(path.join(__dirname, 'data', 'proofs')));
 app.use('/api/payment', paymentRouter);
+app.use('/api/payments/mercado-pago', mercadoPagoOrdersRouter);
+app.use('/api/webhooks/mercado-pago', mercadoPagoWebhookRouter);
 
 // Rotas Administrativas - Movidas para cima para garantir prioridade
 app.post('/api/admin/product', requireAdmin, (req, res) => {

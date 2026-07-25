@@ -600,6 +600,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateInstallments(Math.max(0, total));
     refreshPayBtn();
+
+    if (payMethod === 'mercadopago' && window.MPCheckout) {
+      window.MPCheckout.refresh(getMpContext());
+    }
   }
 
   function updateInstallments(total) {
@@ -649,15 +653,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── Mercado Pago Payment Brick — contexto usado por mercadopago-checkout.js ───
+  function getMpContext() {
+    return {
+      items: orderItems.map(i => ({ id: i.id, quantidade: i.quantidade })),
+      addressId: selectedAddressId,
+      couponCode: appliedCouponCode || null,
+      shippingCost: shippingData ? ((hasFreteGratis || couponFreeShipping) ? 0 : shippingData.price) : 0,
+      authToken: authSession ? authSession.token : null,
+      onSuccess: function(result) {
+        localStorage.setItem('iphone-vendas-cart', '[]');
+        localStorage.removeItem('iphone-vendas-buy-now');
+        sessionStorage.setItem('mp-payment-result', JSON.stringify(result));
+        const qs = new URLSearchParams({ orderId: result.orderId, status: result.status || '' });
+        if (result.paymentId) qs.set('paymentId', result.paymentId);
+        window.location.href = 'pagamento-mercadopago.html?' + qs.toString();
+      },
+    };
+  }
+  window.__getMpContext = getMpContext;
+
   // ── Payment method selection ──────────────────────────────────────────────────
-  window.selectPayMethod = function(method) {
+  window.selectPayMethod = async function(method) {
+    if (method === 'mercadopago') {
+      if (!orderItems.length || !selectedAddressId || !shippingData) {
+        alert('Selecione o endereço de entrega e aguarde o cálculo do frete antes de escolher esta forma de pagamento.');
+        return;
+      }
+      const authed = await ensureAuth();
+      if (!authed || !authSession?.token) return;
+    }
+
     payMethod = method;
     $('co-pix-opt').classList.toggle('selected', method === 'pix');
     $('co-card-opt').classList.toggle('selected', method === 'card');
     $('co-pix-opt').querySelector('input').checked  = method === 'pix';
     $('co-card-opt').querySelector('input').checked = method === 'card';
+    const mpOpt = $('co-mp-opt');
+    if (mpOpt) {
+      mpOpt.classList.toggle('selected', method === 'mercadopago');
+      mpOpt.querySelector('input').checked = method === 'mercadopago';
+    }
     const form = $('co-card-form');
     form.classList.toggle('visible', method === 'card');
+
+    const mpWrap = $('co-mp-brick-wrap');
+    if (mpWrap) mpWrap.style.display = method === 'mercadopago' ? 'block' : 'none';
+    if (payBtn) payBtn.style.display = method === 'mercadopago' ? 'none' : '';
+    const btnHint = $('co-btn-hint');
+    if (btnHint && method === 'mercadopago') btnHint.style.display = 'none';
+
+    if (window.MPCheckout) {
+      if (method === 'mercadopago') window.MPCheckout.activate(getMpContext());
+      else window.MPCheckout.deactivate();
+    }
+
     updateTotal();
   };
 

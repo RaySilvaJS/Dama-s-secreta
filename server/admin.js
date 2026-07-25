@@ -11,6 +11,7 @@ const audit = require('./audit');
 const alerts = require('./alerts');
 const { sendToClient, getGroupId, setGroupId } = require('./whatsapp');
 const telegram = require('./telegram');
+const mercadopago = require('./mercadopago');
 
 const ROOT = path.join(__dirname, '..');
 const DATA = path.join(__dirname, 'data');
@@ -809,6 +810,43 @@ router.post('/pix-config', adminAuth, (req, res) => {
   saveConfig(cfg);
   audit.append('pix_config_updated', req.adminUser?.email || 'devops', req.ip, { pixKeyType: cfg.pixConfig.pixKeyType });
   res.json({ ok: true, pixConfig: cfg.pixConfig });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── MERCADO PAGO CONFIG (Payment Brick) ─────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// Fonte alternativa às variáveis de ambiente — permite configurar/trocar as
+// credenciais do Mercado Pago direto pelo painel, sem editar o .env nem
+// reiniciar o servidor. Se a variável de ambiente correspondente existir, ela
+// tem prioridade (ver server/mercadopago.js).
+
+router.get('/mercadopago-config', adminAuth, (req, res) => {
+  const cfg = loadConfig();
+  res.json({
+    panel: cfg.mpConfig || {},
+    source: mercadopago.getCredsSource(),
+    configured: mercadopago.mpConfigured,
+  });
+});
+
+router.post('/mercadopago-config', adminAuth, (req, res) => {
+  const { accessToken, publicKey, webhookSecret, appUrl } = req.body || {};
+  const cfg = loadConfig();
+  cfg.mpConfig = {
+    accessToken:   (accessToken   || '').trim(),
+    publicKey:     (publicKey     || '').trim(),
+    webhookSecret: (webhookSecret || '').trim(),
+    appUrl:        (appUrl        || '').trim().replace(/\/+$/, ''),
+  };
+  saveConfig(cfg);
+  // Nunca loga o Access Token nem o Webhook Secret — apenas o fato de terem sido atualizados.
+  audit.append('mercadopago_config_updated', req.adminUser?.email || 'devops', req.ip, {
+    accessTokenSet:   !!cfg.mpConfig.accessToken,
+    publicKeySet:     !!cfg.mpConfig.publicKey,
+    webhookSecretSet: !!cfg.mpConfig.webhookSecret,
+    appUrl:           cfg.mpConfig.appUrl,
+  });
+  res.json({ ok: true, panel: cfg.mpConfig, configured: mercadopago.mpConfigured });
 });
 
 // ════════════════════════════════════════════════════════════════════════════

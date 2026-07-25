@@ -577,6 +577,27 @@
         <select id="card-installments" style="display:none;"><option value="1">1x</option></select>
       </div>
 
+      <!-- Mercado Pago — Cartão / Pix / Boleto via Payment Brick -->
+      <div class="co-pay-opt" id="co-mp-opt" onclick="selectPayMethod('mercadopago')">
+        <input type="radio" name="paymethod" value="mercadopago"/>
+        <div class="co-pay-logo" style="background:#009EE3;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.3px">MP</div>
+        <div>
+          <div class="co-pay-label">Cartão, Pix ou Boleto</div>
+          <div class="co-pay-sub">Pagamento processado com segurança pelo Mercado Pago</div>
+        </div>
+      </div>
+
+      <div id="co-mp-brick-wrap" style="display:none;margin-top:14px;">
+        <div id="co-mp-loading" style="display:flex;align-items:center;gap:10px;padding:16px 0;color:#6B3A56;font-size:13px;">
+          <span class="co-spinner dark"></span> Carregando formas de pagamento...
+        </div>
+        <div id="co-mp-error" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;color:#B91C1C;font-size:13px;margin-bottom:10px;"></div>
+        <div id="co-mp-brick-container"></div>
+        <button id="co-mp-retry-btn" type="button" style="display:none;margin-top:10px;width:100%;padding:12px;background:#FFF0F6;color:#C93D72;border:1.5px solid #F0D4E5;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+          Tentar novamente
+        </button>
+      </div>
+
       <!-- Desconto PIX visível -->
       <div class="co-pix-disc" id="co-pix-disc-banner">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
@@ -703,6 +724,8 @@
 <script src="/js/site-config.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/cart.js"></script>
+<script src="https://sdk.mercadopago.com/js/v2"></script>
+<script src="/js/mercadopago-checkout.js"></script>
 <script src="/js/checkout.js"></script>
 </body>
 </html>
