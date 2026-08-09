@@ -557,11 +557,14 @@ header {
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   padding-bottom: 36px;
+  align-items: stretch;
 }
 
 /* ===== CARD PRODUTO ===== */
 .olx-adcard {
-  display: flex;
+  --card-media-size: 180px;
+  display: grid;
+  grid-template-columns: var(--card-media-size) minmax(0, 1fr);
   background: #fff;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -569,6 +572,7 @@ header {
   transition: box-shadow .2s, border-color .2s, transform .2s;
   position: relative;
   cursor: default;
+  height: 100%;
 }
 .olx-adcard:hover {
   box-shadow: var(--shadow-md);
@@ -578,9 +582,10 @@ header {
 
 /* IMAGEM */
 .olx-adcard__media {
-  width: 180px;
-  min-width: 180px;
-  height: 180px;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  height: auto;
   position: relative;
   background: var(--rose-light);
   display: flex;
@@ -592,10 +597,9 @@ header {
 }
 .olx-adcard__media img {
   display: block;
-  width: calc(100% - 16px);
-  height: calc(100% - 16px);
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
   object-fit: contain;
   object-position: center;
   transition: transform .3s;
@@ -625,10 +629,11 @@ header {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 6px;
+  gap: 7px;
+  overflow: hidden;
 }
 
-.olx-adcard__link { text-decoration: none; color: inherit; }
+.olx-adcard__link { text-decoration: none; color: inherit; display: block; }
 
 .olx-adcard__title {
   font-size: 16px;
@@ -637,8 +642,23 @@ header {
   line-height: 1.35;
   margin: 0;
   transition: color .15s;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .olx-adcard__link:hover .olx-adcard__title { color: var(--rose-dark); }
+
+.olx-adcard__sku {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
 
 /* BADGES */
 .olx-adcard__badges {
@@ -661,7 +681,9 @@ header {
 /* SELLER */
 .olx-adcard__seller-info {
   display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
   font-size: 12px;
+  min-width: 0;
 }
 .seller-name { color: var(--text-2); font-weight: 500; }
 .rating { color: #F59E0B; font-weight: 600; font-size: 12px; }
@@ -671,7 +693,7 @@ header {
   font-size: 24px;
   font-weight: 800;
   color: var(--text);
-  margin: 2px 0 0;
+  margin: 6px 0 2px;
   line-height: 1.1;
 }
 .olx-adcard__old-price {
@@ -683,12 +705,15 @@ header {
   font-size: 12px;
   color: var(--green);
   font-weight: 500;
+  line-height: 1.35;
 }
 .font-bold { font-weight: 700; color: var(--text); }
 
 /* LOCALIZAÇÃO */
 .olx-adcard__location-date {
   display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .olx-adcard__location, .olx-adcard__date {
   font-size: 11px; color: var(--text-2);
@@ -696,20 +721,43 @@ header {
   display: flex; align-items: center; gap: 3px;
 }
 
+.olx-adcard__stock {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 2px;
+  min-width: 0;
+}
+.olx-adcard__stock-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #16A34A;
+}
+.olx-adcard__stock.is-low { color: #DC2626; }
+.olx-adcard__stock.is-low .olx-adcard__stock-dot { background: #DC2626; }
+.olx-adcard__stock.is-ok { color: #475569; }
+
 /* BOTÕES */
 .olx-adcard__actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: nowrap;
   margin-top: auto;
-  padding-top: 4px;
+  padding-top: 8px;
+  min-width: 0;
 }
 .olx-adcard__actions .button {
   flex: 1;
   min-width: 0;
-  padding: 9px 10px;
+  min-height: 40px;
+  padding: 9px 12px;
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   border: none;
   cursor: pointer;
@@ -717,7 +765,10 @@ header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  white-space: nowrap;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 .olx-adcard__actions .button:hover { transform: translateY(-1px); }
 
@@ -924,7 +975,7 @@ header {
 
 /* ===== RESPONSIVO ===== */
 @media (max-width: 1024px) {
-  .olx-adcard__media { width: 150px; min-width: 150px; height: 150px; }
+  .olx-adcard { --card-media-size: 160px; }
 }
 
 @media (max-width: 768px) {
@@ -938,7 +989,7 @@ header {
   .hero-cta-primary, .hero-cta-whatsapp { width: 100%; max-width: 320px; text-align: center; justify-content: center; }
 
   .products { grid-template-columns: 1fr; }
-  .olx-adcard__media { width: 130px; min-width: 130px; height: 130px; }
+  .olx-adcard { --card-media-size: 140px; }
   .olx-adcard__content { padding: 10px 12px; gap: 4px; }
   .olx-adcard__title { font-size: 14px; }
   .olx-adcard__price { font-size: 18px; }
@@ -957,15 +1008,21 @@ header {
   .announcement-bar { font-size: 11px; }
   .trust-strip-inner { gap: 0; }
 
-  .olx-adcard__media { width: 120px; min-width: 120px; height: 120px; }
-  .olx-adcard__content { padding: 8px 10px; gap: 3px; }
+  .olx-adcard {
+    grid-template-columns: 1fr;
+    --card-media-size: 100%;
+  }
+  .olx-adcard__media {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .olx-adcard__content { padding: 10px 12px; gap: 6px; }
   .olx-adcard__title { font-size: 13px; margin-bottom: 4px; }
   .olx-adcard__badges { display: none; }
   .olx-adcard__price { font-size: 16px; }
   .olx-adcard__price-info { font-size: 11px; }
-  .olx-adcard__location-date { display: none; }
   .olx-adcard__actions { gap: 5px; }
-  .olx-adcard__actions .button { font-size: 12px; padding: 7px 6px; flex: 1; min-width: 0; }
+  .olx-adcard__actions .button { font-size: 12px; padding: 8px 8px; flex: 1; min-width: 0; }
 
   .footer-top { grid-template-columns: 1fr; gap: 24px; }
   .benefits { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -979,9 +1036,9 @@ header {
 }
 
 @media (max-width: 420px) {
-  .olx-adcard__media { width: 100px; min-width: 100px; height: 100px; }
   .olx-adcard__price { font-size: 15px; }
-  .olx-adcard__seller-info { display: none; }
+  .olx-adcard__actions { flex-direction: column; }
+  .olx-adcard__actions .button { width: 100%; }
   .header-btn { padding: 6px 8px; }
 }
 

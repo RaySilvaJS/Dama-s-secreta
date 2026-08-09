@@ -360,6 +360,8 @@ const _buildProductCardHTML = (product) => {
   const precoFinal = precoOriginal * (1 - descontoHoje / 100);
   const isIphone = !!(product.name && product.name.toLowerCase().includes('iphone'));
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
+  const isLowStock = Number(stock) <= 5;
+  const stockLabel = isLowStock ? `Últimas ${stock} unidades!` : `${stock} unidades em estoque`;
 
   return `<section class="olx-adcard" data-product-id="${product.id}" style="${isUnavailable ? 'opacity:.6;' : ''}">
 
@@ -388,6 +390,8 @@ const _buildProductCardHTML = (product) => {
       <a href="${productUrl}" class="olx-adcard__link">
         <h2 class="olx-adcard__title">${product.name}</h2>
       </a>
+
+      <p class="olx-adcard__sku">Código/SKU: ${product.id}</p>
 
       ${isIphone ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
 
@@ -426,9 +430,9 @@ const _buildProductCardHTML = (product) => {
         <p class="olx-adcard__date">Envio imediato</p>
       </div>
 
-      ${!isUnavailable ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;margin-top:4px;">
-        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${stock <= 5 ? '#DC2626' : '#16A34A'};flex-shrink:0;"></span>
-        <span style="color:${stock <= 5 ? '#DC2626' : '#475569'};">${stock <= 5 ? `Últimas ${stock} unidades!` : `${stock} unidades em estoque`}</span>
+      ${!isUnavailable ? `<div class="olx-adcard__stock ${isLowStock ? 'is-low' : 'is-ok'}">
+        <span class="olx-adcard__stock-dot"></span>
+        <span>${stockLabel}</span>
       </div>` : ''}
 
       <div class="olx-adcard__actions">
