@@ -1004,10 +1004,84 @@ header {
   .categories { padding: 0 16px; }
 }
 
+@media (max-width: 767px) {
+  .products {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .olx-adcard {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+  .olx-adcard__media {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: 1 / 1;
+  }
+  .olx-adcard__media img {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    object-fit: cover;
+    object-position: center;
+  }
+  .olx-adcard__favorite {
+    width: 26px;
+    height: 26px;
+    top: 6px;
+    right: 6px;
+    font-size: 12px;
+  }
+  .olx-adcard__content {
+    padding: 8px 9px;
+    gap: 4px;
+  }
+  .olx-adcard__title {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .olx-adcard__sku {
+    font-size: 10px;
+  }
+  .olx-adcard__seller-info,
+  .rating,
+  .seller-name,
+  .olx-adcard__price-info,
+  .entrega-full-text,
+  .brinde-line,
+  .olx-adcard__location,
+  .olx-adcard__date,
+  .olx-adcard__stock {
+    font-size: 10px;
+  }
+  .olx-adcard__price {
+    font-size: 16px;
+    margin: 4px 0 1px;
+  }
+  .olx-adcard__actions {
+    flex-direction: column;
+    gap: 5px;
+    padding-top: 6px;
+  }
+  .olx-adcard__actions .button {
+    width: 100%;
+    min-height: 34px;
+    font-size: 11px;
+    padding: 7px 6px;
+  }
+}
+
 @media (max-width: 600px) {
   .announcement-bar { font-size: 11px; }
   .trust-strip-inner { gap: 0; }
 
+  .products { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .olx-adcard {
     grid-template-columns: 1fr;
     --card-media-size: 100%;
@@ -1036,9 +1110,9 @@ header {
 }
 
 @media (max-width: 420px) {
+  .products { gap: 7px; }
   .olx-adcard__price { font-size: 15px; }
-  .olx-adcard__actions { flex-direction: column; }
-  .olx-adcard__actions .button { width: 100%; }
+  .olx-adcard__actions .button { font-size: 10.5px; }
   .header-btn { padding: 6px 8px; }
 }
 
