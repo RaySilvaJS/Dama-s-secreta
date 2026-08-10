@@ -965,6 +965,17 @@ tbody tr:last-child td { border-bottom: none; }
         <button class="btn btn-blue" style="margin-top:12px" onclick="saveSmtpCfg()">💾 Salvar Configuração SMTP</button>
         <div id="smtp-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
 
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              E-mail para teste SMTP
+            </label>
+            <input id="smtp-test-to" type="email" class="input" style="width:100%" placeholder="voce@dominio.com" autocomplete="off"/>
+          </div>
+          <button id="smtp-test-btn" class="btn btn-ghost" style="height:40px;white-space:nowrap" onclick="testSmtpSend()">📨 Enviar teste</button>
+        </div>
+        <div id="smtp-test-feedback" style="font-size:12px;display:none;margin-top:8px"></div>
+
         <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bg3)">
           <h4 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px">Tutorial Rápido: onde pegar cada campo</h4>
           <ol style="font-size:12px;color:var(--muted);padding-left:18px;line-height:1.8;margin:0 0 12px">
@@ -5438,6 +5449,54 @@ async function saveSmtpCfg() {
       fb.style.color = 'var(--red)';
       fb.textContent = 'Erro: ' + e.message;
       fb.style.display = '';
+    }
+  }
+}
+
+async function testSmtpSend() {
+  const input = document.getElementById('smtp-test-to');
+  const btn = document.getElementById('smtp-test-btn');
+  const fb = document.getElementById('smtp-test-feedback');
+  const to = (input?.value || '').trim();
+
+  if (!to) {
+    if (fb) {
+      fb.style.color = 'var(--red)';
+      fb.textContent = 'Informe um e-mail para teste.';
+      fb.style.display = '';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Enviando...';
+  }
+
+  try {
+    const r = await api.post('/api/admin/smtp-test', { to });
+    if (!fb) return;
+
+    if (r?.ok) {
+      fb.style.color = 'var(--green)';
+      fb.textContent = `✓ ${r.message || 'Teste enviado.'}${r.warning ? ' | ' + r.warning : ''}`;
+      fb.style.display = '';
+      return;
+    }
+
+    fb.style.color = 'var(--red)';
+    fb.textContent = `Erro: ${r?.error || 'Falha no teste SMTP.'}${r?.detail ? ' | Detalhe: ' + r.detail : ''}${r?.code ? ' | Código: ' + r.code : ''}`;
+    fb.style.display = '';
+  } catch (e) {
+    if (fb) {
+      fb.style.color = 'var(--red)';
+      fb.textContent = 'Erro ao testar SMTP: ' + e.message;
+      fb.style.display = '';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '📨 Enviar teste';
     }
   }
 }

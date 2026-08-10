@@ -12,6 +12,7 @@ const alerts = require('./alerts');
 const { sendToClient, getGroupId, setGroupId } = require('./whatsapp');
 const telegram = require('./telegram');
 const mercadopago = require('./mercadopago');
+const nodemailer = require('nodemailer');
 
 const ROOT = path.join(__dirname, '..');
 const DATA = path.join(__dirname, 'data');
@@ -40,6 +41,23 @@ const fmtBytes = (b) => {
   const i = Math.floor(Math.log(b) / Math.log(k));
   return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
 };
+
+const getRuntimeSmtpConfig = () => {
+  const cfg = loadConfig();
+  const panel = cfg.smtpConfig || {};
+
+  const host = (process.env.SMTP_HOST || panel.host || '').trim();
+  const port = String(process.env.SMTP_PORT || panel.port || '').trim();
+  const secureRaw = String(process.env.SMTP_SECURE ?? panel.secure ?? '').trim().toLowerCase();
+  const user = (process.env.SMTP_USER || panel.user || '').trim();
+  const pass = (process.env.SMTP_PASS || panel.pass || '').trim();
+  const from = (process.env.MAIL_FROM || panel.from || '').trim();
+  const appUrl = (process.env.APP_URL || panel.appUrl || cfg.mpConfig?.appUrl || '').trim().replace(/\/+$/, '');
+
+  return { host, port, secureRaw, user, pass, from, appUrl };
+};
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
 // ---- Admin auth middleware ----
 const adminAuth = (req, res, next) => {
@@ -920,6 +938,84 @@ router.post('/smtp-config', adminAuth, (req, res) => {
   });
 
   res.json({ ok: true, panel: { ...cfg.smtpConfig, pass: cfg.smtpConfig.pass ? '********' : '' } });
+});
+
+router.post('/smtp-test', adminAuth, async (req, res) => {
+  const to = String(req.body?.to || '').trim().toLowerCase();
+  if (!isValidEmail(to)) {
+    return res.status(400).json({ ok: false, error: 'Informe um e-mail de destino válido para teste.' });
+  }
+
+  const smtp = getRuntimeSmtpConfig();
+  const secure = smtp.secureRaw === 'true' || smtp.secureRaw === '1';
+  const port = Number(smtp.port || (secure ? 465 : 587));
+
+  if (!smtp.host || !smtp.user || !smtp.pass || !smtp.from || !Number.isFinite(port) || port <= 0) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Configuração SMTP incompleta ou inválida. Revise HOST, PORT, USER, PASS e MAIL_FROM.'
+    });
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port,
+    secure,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    }
+  });
+
+  try {
+    await transporter.verify();
+
+    const info = await transporter.sendMail({
+      from: smtp.from,
+      to,
+      subject: 'Teste SMTP - LUAR SEDUCAO',
+      text: [
+        'Teste de envio SMTP realizado pelo painel DevOps.',
+        `Data: ${new Date().toISOString()}`,
+        smtp.appUrl ? `APP_URL ativa: ${smtp.appUrl}` : 'APP_URL nao configurada no momento.'
+      ].join('\n'),
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.5;padding:16px;color:#222;">
+          <h2 style="margin:0 0 10px;">Teste SMTP - LUAR SEDUCAO</h2>
+          <p style="margin:0 0 8px;">Se voce recebeu este e-mail, o SMTP esta funcionando.</p>
+          <p style="margin:0;color:#555;">Data: ${new Date().toISOString()}</p>
+        </div>
+      `
+    });
+
+    audit.append('smtp_test_sent', req.adminUser?.email || 'devops', req.ip, {
+      to,
+      accepted: Array.isArray(info.accepted) ? info.accepted.length : 0,
+      rejected: Array.isArray(info.rejected) ? info.rejected.length : 0,
+      messageId: info.messageId || null
+    });
+
+    return res.json({
+      ok: true,
+      message: 'E-mail de teste enviado. Verifique caixa de entrada e spam.',
+      messageId: info.messageId || null,
+      accepted: info.accepted || [],
+      rejected: info.rejected || [],
+      warning: smtp.appUrl ? null : 'APP_URL nao configurada. O teste SMTP funciona, mas o link de recuperacao pode falhar.'
+    });
+  } catch (e) {
+    console.error('[SMTP-TEST] Falha no teste SMTP:', e.message);
+    return res.status(502).json({
+      ok: false,
+      error: 'Falha ao conectar/autenticar/enviar via SMTP.',
+      detail: e.message,
+      code: e.code || null,
+      command: e.command || null
+    });
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
