@@ -171,6 +171,86 @@ input.error-input { border-color: var(--red) !important; }
 .link-row a { color: var(--rose-dark); font-weight: 600; text-decoration: none; }
 .link-row a:hover { text-decoration: underline; }
 
+.forgot-row {
+  margin: 6px 0 4px;
+  display: flex;
+  justify-content: flex-end;
+}
+.forgot-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  text-decoration: none;
+}
+.forgot-link:hover {
+  color: var(--rose-dark);
+  text-decoration: underline;
+}
+
+/* FORGOT PASSWORD MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+  padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px 20px;
+}
+.modal-title {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.modal-subtitle {
+  color: var(--text-2);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.modal-actions {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.btn-secondary {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--rose); color: var(--rose-dark); }
+.info-msg {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: #1E3A8A;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  display: none;
+}
+
 /* SPINNER */
 .spinner {
   display: inline-block;
@@ -245,6 +325,10 @@ input.error-input { border-color: var(--red) !important; }
         <label for="remember-me" style="cursor:pointer;font-size:14px;color:var(--text-2);margin:0;user-select:none">Lembrar-me neste dispositivo</label>
       </div>
 
+      <div class="forgot-row">
+        <button type="button" class="forgot-link" id="forgot-link">Esqueci minha senha?</button>
+      </div>
+
       <button type="submit" class="btn-primary" id="submit-btn">Entrar na minha conta</button>
     </form>
 
@@ -261,6 +345,28 @@ input.error-input { border-color: var(--red) !important; }
     </div>
   </div>
 </main>
+
+<div class="modal-overlay" id="forgot-modal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+    <h2 class="modal-title" id="forgot-title">Recuperar senha</h2>
+    <p class="modal-subtitle">Digite o e-mail cadastrado na sua conta.</p>
+
+    <div class="error-msg" id="forgot-error" style="margin-bottom:14px;"></div>
+    <div class="info-msg" id="forgot-info"></div>
+
+    <form id="forgot-form" novalidate>
+      <div class="form-group" style="margin-bottom:0;">
+        <label for="forgot-email">E-mail</label>
+        <input type="email" id="forgot-email" placeholder="seuemail@exemplo.com" autocomplete="email" required/>
+      </div>
+
+      <div class="modal-actions">
+        <button type="submit" class="btn-primary" id="forgot-submit">Enviar link de recuperação</button>
+        <button type="button" class="btn-secondary" id="forgot-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -288,6 +394,14 @@ input.error-input { border-color: var(--red) !important; }
   const submitBtn = document.getElementById('submit-btn');
   const togglePw  = document.getElementById('toggle-pw');
   const senhaInput= document.getElementById('senha');
+  const forgotLink = document.getElementById('forgot-link');
+  const forgotModal = document.getElementById('forgot-modal');
+  const forgotCancel = document.getElementById('forgot-cancel');
+  const forgotForm = document.getElementById('forgot-form');
+  const forgotEmail = document.getElementById('forgot-email');
+  const forgotSubmit = document.getElementById('forgot-submit');
+  const forgotError = document.getElementById('forgot-error');
+  const forgotInfo = document.getElementById('forgot-info');
 
   togglePw.addEventListener('click', function () {
     const isText = senhaInput.type === 'text';
@@ -303,6 +417,91 @@ input.error-input { border-color: var(--red) !important; }
     submitBtn.disabled  = loading;
     submitBtn.innerHTML = loading ? '<span class="spinner"></span>Entrando...' : 'Entrar na minha conta';
   }
+
+  function showForgotError(msg) {
+    forgotError.textContent = msg;
+    forgotError.style.display = 'block';
+  }
+
+  function hideForgotError() {
+    forgotError.style.display = 'none';
+  }
+
+  function showForgotInfo(msg) {
+    forgotInfo.textContent = msg;
+    forgotInfo.style.display = 'block';
+  }
+
+  function hideForgotInfo() {
+    forgotInfo.style.display = 'none';
+  }
+
+  function setForgotLoading(loading) {
+    forgotSubmit.disabled = loading;
+    forgotSubmit.innerHTML = loading ? '<span class="spinner"></span>Enviando...' : 'Enviar link de recuperação';
+  }
+
+  function openForgotModal() {
+    hideForgotError();
+    hideForgotInfo();
+    forgotForm.reset();
+    forgotModal.classList.add('show');
+    forgotModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => forgotEmail.focus(), 50);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeForgotModal() {
+    forgotModal.classList.remove('show');
+    forgotModal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  forgotLink.addEventListener('click', openForgotModal);
+  forgotCancel.addEventListener('click', closeForgotModal);
+
+  forgotModal.addEventListener('click', function (e) {
+    if (e.target === forgotModal) closeForgotModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && forgotModal.classList.contains('show')) {
+      closeForgotModal();
+    }
+  });
+
+  forgotForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    hideForgotError();
+    hideForgotInfo();
+
+    const email = forgotEmail.value.trim();
+    if (!email) {
+      showForgotError('Informe seu e-mail.');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const r = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.success) {
+        showForgotError(data.error || 'Não foi possível processar sua solicitação agora.');
+        setForgotLoading(false);
+        return;
+      }
+
+      showForgotInfo(data.message || 'Se existir uma conta associada a este e-mail, enviaremos um link para redefinir sua senha.');
+      forgotForm.reset();
+    } catch (err) {
+      showForgotError('Erro de conexão. Tente novamente.');
+    }
+    setForgotLoading(false);
+  });
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();

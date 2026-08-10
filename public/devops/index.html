@@ -897,6 +897,92 @@ tbody tr:last-child td { border-bottom: none; }
         </div>
       </div>
 
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+          <h3 style="margin:0">🔐 Recuperação de Senha (SMTP)</h3>
+          <span id="smtp-status-badge" class="badge badge-yellow">Verificando...</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+          Configure aqui o envio de e-mail do fluxo <strong>Esqueci minha senha</strong>. Se as variáveis
+          <code>SMTP_*</code>, <code>MAIL_FROM</code> e <code>APP_URL</code> estiverem no <code>.env</code>,
+          elas têm prioridade sobre o painel.
+        </p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              SMTP Host <span id="smtp-src-host" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-host" type="text" class="input" style="width:100%" placeholder="smtp.seu-provedor.com" autocomplete="off"/>
+          </div>
+
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              SMTP Port <span id="smtp-src-port" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-port" type="text" class="input" style="width:100%" placeholder="587 ou 465" autocomplete="off"/>
+          </div>
+
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              SMTP Secure <span id="smtp-src-secure" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <select id="smtp-secure" class="input" style="width:100%">
+              <option value="false">false (STARTTLS/porta 587)</option>
+              <option value="true">true (SSL/porta 465)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              SMTP User <span id="smtp-src-user" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-user" type="text" class="input" style="width:100%" placeholder="usuario@dominio.com" autocomplete="off"/>
+          </div>
+
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              SMTP Pass <span id="smtp-src-pass" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-pass" type="password" class="input" style="width:100%" placeholder="Senha SMTP ou senha de app" autocomplete="new-password"/>
+          </div>
+
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              MAIL_FROM <span id="smtp-src-from" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-from" type="text" class="input" style="width:100%" placeholder="DAMA'S SECRETA <no-reply@seu-dominio.com>" autocomplete="off"/>
+          </div>
+
+          <div style="grid-column:1 / -1">
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">
+              URL do site (APP_URL) <span id="smtp-src-appUrl" style="text-transform:none;letter-spacing:0"></span>
+            </label>
+            <input id="smtp-app-url" type="text" class="input" style="width:100%" placeholder="https://seudominio.com" autocomplete="off"/>
+          </div>
+        </div>
+
+        <button class="btn btn-blue" style="margin-top:12px" onclick="saveSmtpCfg()">💾 Salvar Configuração SMTP</button>
+        <div id="smtp-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bg3)">
+          <h4 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px">Tutorial Rápido: onde pegar cada campo</h4>
+          <ol style="font-size:12px;color:var(--muted);padding-left:18px;line-height:1.8;margin:0 0 12px">
+            <li><strong>Escolha um provedor SMTP</strong> (Gmail, Brevo, Hostinger, etc.).</li>
+            <li><strong>SMTP_HOST / SMTP_PORT</strong>: pegue na documentação do provedor.</li>
+            <li><strong>SMTP_SECURE</strong>: use <code>true</code> para porta 465, <code>false</code> para 587.</li>
+            <li><strong>SMTP_USER / SMTP_PASS</strong>: credenciais SMTP (em Gmail, use senha de app).</li>
+            <li><strong>MAIL_FROM</strong>: remetente visível no e-mail (ex.: loja + e-mail válido do domínio).</li>
+            <li><strong>APP_URL</strong>: URL pública do site (ex.: https://seudominio.com).</li>
+            <li>Salve, depois teste em <code>/login.html</code> → <strong>Esqueci minha senha?</strong></li>
+          </ol>
+          <p style="font-size:12px;color:var(--muted);margin:0">
+            Exemplo Gmail: host <code>smtp.gmail.com</code>, port <code>587</code>, secure <code>false</code>.
+            Exemplo Brevo: host <code>smtp-relay.brevo.com</code>, port <code>587</code>, secure <code>false</code>.
+          </p>
+        </div>
+      </div>
+
       <div class="card">
         <h3>Gerenciar Usuários</h3>
         <div class="table-wrap">
@@ -2939,6 +3025,7 @@ async function loadSettings() {
     api.get('/api/admin/users')
   ]);
   loadSiteBrandForm();
+  loadSmtpCfgForm();
 
   if (maint) {
     const tog = document.getElementById('maintenance-toggle');
@@ -5282,6 +5369,76 @@ async function saveMpCfg() {
     await loadMpCfgForm();
   } catch(e) {
     if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
+  }
+}
+
+// ── Configuração SMTP (Recuperação de Senha) ────────────────────────────────
+async function loadSmtpCfgForm() {
+  try {
+    const data = await api.get('/api/admin/smtp-config');
+    if (!data) return;
+    const panel = data.panel || {};
+    const src = data.source || {};
+
+    const setField = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined && val !== null && String(val) !== '') el.value = String(val);
+    };
+
+    setField('smtp-host', panel.host);
+    setField('smtp-port', panel.port);
+    setField('smtp-secure', panel.secure);
+    setField('smtp-user', panel.user);
+    setField('smtp-pass', panel.pass);
+    setField('smtp-from', panel.from);
+    setField('smtp-app-url', panel.appUrl);
+
+    const srcLabel = (s) => s === 'env'
+      ? '<span style="color:var(--blue)">(via .env)</span>'
+      : s === 'panel'
+        ? '<span style="color:var(--green)">(via painel)</span>'
+        : '<span style="color:var(--red)">(não definido)</span>';
+
+    ['host','port','secure','user','pass','from','appUrl'].forEach((f) => {
+      const el = document.getElementById('smtp-src-' + f);
+      if (el) el.innerHTML = srcLabel(src[f]);
+    });
+
+    const badge = document.getElementById('smtp-status-badge');
+    if (badge) {
+      badge.textContent = data.configured ? '✓ Configurado' : '⚠ Incompleto';
+      badge.className = 'badge ' + (data.configured ? 'badge-green' : 'badge-yellow');
+    }
+  } catch {}
+}
+
+async function saveSmtpCfg() {
+  const host = document.getElementById('smtp-host')?.value.trim();
+  const port = document.getElementById('smtp-port')?.value.trim();
+  const secure = document.getElementById('smtp-secure')?.value;
+  const user = document.getElementById('smtp-user')?.value.trim();
+  const pass = document.getElementById('smtp-pass')?.value.trim();
+  const from = document.getElementById('smtp-from')?.value.trim();
+  const appUrl = document.getElementById('smtp-app-url')?.value.trim();
+  const fb = document.getElementById('smtp-cfg-feedback');
+
+  try {
+    const r = await api.post('/api/admin/smtp-config', { host, port, secure, user, pass, from, appUrl });
+    if (fb) {
+      fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
+      fb.textContent = r?.ok
+        ? '✓ Configuração SMTP salva! O fluxo de recuperação já pode usar estes dados.'
+        : (r?.error || 'Erro ao salvar.');
+      fb.style.display = '';
+      setTimeout(() => { if (fb) fb.style.display = 'none'; }, 4000);
+    }
+    await loadSmtpCfgForm();
+  } catch (e) {
+    if (fb) {
+      fb.style.color = 'var(--red)';
+      fb.textContent = 'Erro: ' + e.message;
+      fb.style.display = '';
+    }
   }
 }
 

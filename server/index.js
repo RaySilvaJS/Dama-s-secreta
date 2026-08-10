@@ -15,7 +15,9 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const axios = require('axios');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const paymentRouter = require('./payment');
 const mercadoPagoOrdersRouter = require('./mercadoPagoOrders');
 const mercadoPagoWebhookRouter = require('./mercadoPagoWebhook');
@@ -76,6 +78,114 @@ const validateCPF = (cpf) => {
   r = (s * 10) % 11;
   if (r === 10 || r === 11) r = 0;
   return r === parseInt(d[10]);
+};
+
+const PASSWORD_RESET_TTL_MS = 20 * 60 * 1000;
+const PASSWORD_RESET_PUBLIC_MESSAGE = 'Se existir uma conta associada a este e-mail, enviaremos um link para redefinir sua senha.';
+const PASSWORD_RESET_INVALID_MESSAGE = 'Este link de recuperação é inválido ou expirou. Solicite um novo link.';
+
+const sha256 = (value) => crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
+
+const safeHashEquals = (left, right) => {
+  const a = Buffer.from(String(left || ''), 'utf8');
+  const b = Buffer.from(String(right || ''), 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+};
+
+const getRuntimeSmtpConfig = () => {
+  const cfg = loadConfig();
+  const panel = cfg.smtpConfig || {};
+
+  const host = (process.env.SMTP_HOST || panel.host || '').trim();
+  const port = String(process.env.SMTP_PORT || panel.port || '').trim();
+  const secureRaw = String(process.env.SMTP_SECURE ?? panel.secure ?? '').trim().toLowerCase();
+  const user = (process.env.SMTP_USER || panel.user || '').trim();
+  const pass = (process.env.SMTP_PASS || panel.pass || '').trim();
+  const from = (process.env.MAIL_FROM || panel.from || '').trim();
+  const appUrl = (process.env.APP_URL || panel.appUrl || cfg.mpConfig?.appUrl || '').trim().replace(/\/+$/, '');
+
+  return { host, port, secureRaw, user, pass, from, appUrl };
+};
+
+const isSmtpConfigured = () => {
+  const smtp = getRuntimeSmtpConfig();
+  return !!(
+    smtp.host &&
+    smtp.port &&
+    smtp.user &&
+    smtp.pass &&
+    smtp.from
+  );
+};
+
+const buildResetPasswordUrl = (token) => {
+  const appUrl = getRuntimeSmtpConfig().appUrl;
+  if (!appUrl) return null;
+  return `${appUrl}/reset-password.html?token=${encodeURIComponent(token)}`;
+};
+
+const sendPasswordResetEmail = async (toEmail, token) => {
+  if (!isSmtpConfigured()) {
+    throw new Error('SMTP não configurado. Verifique variáveis SMTP_* e MAIL_FROM.');
+  }
+
+  const resetUrl = buildResetPasswordUrl(token);
+  if (!resetUrl) {
+    throw new Error('APP_URL não configurada para montar link de recuperação.');
+  }
+
+  const smtp = getRuntimeSmtpConfig();
+  const secureRaw = smtp.secureRaw;
+  const secure = secureRaw === 'true' || secureRaw === '1';
+  const port = Number(smtp.port || (secure ? 465 : 587));
+
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new Error('SMTP_PORT inválida.');
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port,
+    secure,
+    auth: {
+      user: smtp.user,
+      pass: smtp.pass,
+    }
+  });
+
+  const text = [
+    'Recebemos uma solicitação para redefinir a senha da sua conta.',
+    '',
+    'Clique no link abaixo para criar uma nova senha:',
+    resetUrl,
+    '',
+    'Este link é válido por aproximadamente 20 minutos.',
+    'Se você não solicitou essa alteração, ignore este e-mail.'
+  ].join('\n');
+
+  const html = `
+    <div style="font-family:Inter,Arial,sans-serif;background:#fff8fa;padding:24px;color:#1A0A12;line-height:1.5;">
+      <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #F0D4E5;border-radius:14px;box-shadow:0 4px 24px rgba(180,50,100,.1);overflow:hidden;">
+        <div style="padding:22px 24px;background:#0A0A0A;color:#ffffff;font-family:'Playfair Display',Georgia,serif;font-size:22px;letter-spacing:.04em;">DAMA'S SECRETA</div>
+        <div style="padding:26px 24px;">
+          <h1 style="margin:0 0 12px;font-size:22px;color:#1A0A12;">Redefinição de senha</h1>
+          <p style="margin:0 0 14px;color:#6B3A56;">Recebemos uma solicitação para redefinir a senha da sua conta.</p>
+          <p style="margin:0 0 20px;color:#6B3A56;">Este link é válido por aproximadamente 20 minutos.</p>
+          <a href="${resetUrl}" style="display:inline-block;padding:12px 18px;border-radius:9px;background:linear-gradient(135deg,#E8518A,#C93D72);color:#fff;text-decoration:none;font-weight:700;">Redefinir minha senha</a>
+          <p style="margin:20px 0 0;color:#6B3A56;">Se você não solicitou essa alteração, ignore este e-mail.</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: smtp.from,
+    to: toEmail,
+    subject: 'Redefinição de senha',
+    text,
+    html,
+  });
 };
 
 // Busca índice do usuário pelo token — suporta sessions[] (multi-dispositivo) e legacy token
@@ -1231,6 +1341,86 @@ app.post('/api/auth/login', authRateLimit(10, 15 * 60 * 1000), (req, res) => {
     rememberMe: persist,
     user: { id: u.id, nome: u.nome, email: u.email, whatsapp: u.whatsapp, cpf: u.cpf, role: u.role || 'user' }
   });
+});
+
+app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (req, res) => {
+  const publicResponse = { success: true, message: PASSWORD_RESET_PUBLIC_MESSAGE };
+  const { email } = req.body || {};
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+  // Sempre retorna resposta neutra para evitar enumeração de usuários.
+  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.json(publicResponse);
+  }
+
+  const users = loadUsers();
+  const idx = users.findIndex(u => (u.email || '').toLowerCase() === normalizedEmail);
+  if (idx === -1) return res.json(publicResponse);
+
+  const user = users[idx];
+  const isGuestAccount = user.isGuest === true || /^guest_\d+@jessi\.local$/i.test(user.email || '');
+  if (isGuestAccount) return res.json(publicResponse);
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  users[idx].passwordReset = {
+    tokenHash: sha256(resetToken),
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: null,
+  };
+  saveUsers(users);
+
+  try {
+    await sendPasswordResetEmail(user.email, resetToken);
+  } catch (e) {
+    console.error('[AUTH] Falha ao enviar e-mail de recuperação:', e.message);
+  }
+
+  res.json(publicResponse);
+});
+
+app.post('/api/auth/reset-password', authRateLimit(10, 15 * 60 * 1000), (req, res) => {
+  const { token, novaSenha, confirmarSenha } = req.body || {};
+
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: PASSWORD_RESET_INVALID_MESSAGE });
+  }
+  if (!novaSenha || typeof novaSenha !== 'string') {
+    return res.status(400).json({ error: 'A nova senha é obrigatória.' });
+  }
+  if (novaSenha.length < 6) {
+    return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres.' });
+  }
+  if (!confirmarSenha || novaSenha !== confirmarSenha) {
+    return res.status(400).json({ error: 'As senhas não coincidem.' });
+  }
+
+  const tokenHash = sha256(token);
+  const now = Date.now();
+  const users = loadUsers();
+
+  const idx = users.findIndex((u) => {
+    const reset = u.passwordReset;
+    if (!reset || !reset.tokenHash) return false;
+    if (!safeHashEquals(reset.tokenHash, tokenHash)) return false;
+    if (reset.usedAt) return false;
+    if (!reset.expiresAt) return false;
+    const expiresAtMs = new Date(reset.expiresAt).getTime();
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs < now) return false;
+    return true;
+  });
+
+  if (idx === -1) {
+    return res.status(400).json({ error: PASSWORD_RESET_INVALID_MESSAGE });
+  }
+
+  users[idx].senha = bcrypt.hashSync(novaSenha, 10);
+  users[idx].sessions = [];
+  users[idx].token = null;
+  delete users[idx].passwordReset;
+  saveUsers(users);
+
+  res.json({ success: true, message: 'Senha alterada com sucesso.' });
 });
 
 app.get('/api/auth/me', (req, res) => {

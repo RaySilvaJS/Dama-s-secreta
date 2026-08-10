@@ -850,6 +850,79 @@ router.post('/mercadopago-config', adminAuth, (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── SMTP CONFIG (Recuperação de Senha) ─────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+router.get('/smtp-config', adminAuth, (req, res) => {
+  const cfg = loadConfig();
+  const panel = cfg.smtpConfig || {};
+  const env = {
+    host: !!process.env.SMTP_HOST,
+    port: !!process.env.SMTP_PORT,
+    secure: process.env.SMTP_SECURE !== undefined,
+    user: !!process.env.SMTP_USER,
+    pass: !!process.env.SMTP_PASS,
+    from: !!process.env.MAIL_FROM,
+    appUrl: !!process.env.APP_URL,
+  };
+
+  res.json({
+    panel,
+    source: {
+      host: env.host ? 'env' : (panel.host ? 'panel' : 'none'),
+      port: env.port ? 'env' : (panel.port ? 'panel' : 'none'),
+      secure: env.secure ? 'env' : (panel.secure !== undefined ? 'panel' : 'none'),
+      user: env.user ? 'env' : (panel.user ? 'panel' : 'none'),
+      pass: env.pass ? 'env' : (panel.pass ? 'panel' : 'none'),
+      from: env.from ? 'env' : (panel.from ? 'panel' : 'none'),
+      appUrl: env.appUrl ? 'env' : ((panel.appUrl || cfg.mpConfig?.appUrl) ? 'panel' : 'none'),
+    },
+    configured: (env.host || panel.host)
+      && (env.port || panel.port)
+      && (env.user || panel.user)
+      && (env.pass || panel.pass)
+      && (env.from || panel.from)
+      && (env.appUrl || panel.appUrl || cfg.mpConfig?.appUrl),
+  });
+});
+
+router.post('/smtp-config', adminAuth, (req, res) => {
+  const {
+    host,
+    port,
+    secure,
+    user,
+    pass,
+    from,
+    appUrl,
+  } = req.body || {};
+
+  const cfg = loadConfig();
+  cfg.smtpConfig = {
+    host: (host || '').trim(),
+    port: (port || '').toString().trim(),
+    secure: String(secure || '').trim().toLowerCase(),
+    user: (user || '').trim(),
+    pass: (pass || '').trim(),
+    from: (from || '').trim(),
+    appUrl: (appUrl || '').trim().replace(/\/+$/, ''),
+  };
+
+  saveConfig(cfg);
+  audit.append('smtp_config_updated', req.adminUser?.email || 'devops', req.ip, {
+    hostSet: !!cfg.smtpConfig.host,
+    portSet: !!cfg.smtpConfig.port,
+    secureSet: !!cfg.smtpConfig.secure,
+    userSet: !!cfg.smtpConfig.user,
+    passSet: !!cfg.smtpConfig.pass,
+    fromSet: !!cfg.smtpConfig.from,
+    appUrl: cfg.smtpConfig.appUrl,
+  });
+
+  res.json({ ok: true, panel: { ...cfg.smtpConfig, pass: cfg.smtpConfig.pass ? '********' : '' } });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // ── SITE CONFIG (marca: nome, WhatsApp, Instagram, logo) ───────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
