@@ -97,15 +97,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStorage.setItem('historico-pedidos', JSON.stringify(hist));
                 } catch (e) {}
                 try {
+                    const summary = JSON.parse(localStorage.getItem('checkout-summary') || 'null');
+                    const ids      = summary ? summary.produto.map(p => String(p.id)).filter(Boolean) : [];
+                    const numItems = summary ? summary.quantidade : 1;
+                    const value    = currentAmount || (summary ? summary.total_final : 0);
                     if (window.MetaPixel) {
-                        const summary = JSON.parse(localStorage.getItem('checkout-summary') || 'null');
-                        const ids      = summary ? summary.produto.map(p => String(p.id)).filter(Boolean) : [];
-                        const numItems = summary ? summary.quantidade : 1;
                         window.MetaPixel.purchase({
                             orderId:  paymentId,
-                            value:    currentAmount || (summary ? summary.total_final : 0),
+                            value,
                             ids,
                             numItems
+                        });
+                    }
+                    if (window.GoogleAds) {
+                        window.GoogleAds.purchaseConversion({
+                            transactionId: paymentId,
+                            value,
+                            currency: 'BRL'
                         });
                     }
                 } catch (e) {}

@@ -24,6 +24,34 @@
     console.log('[Google Tag] Inicializada:', GOOGLE_ADS_ID);
   }
 
+  window.GoogleAds = window.GoogleAds || {
+    purchaseConversion: function (data) {
+      if (typeof gtag !== 'function') return;
+      var transactionId = String((data && data.transactionId) || '').trim();
+      if (!transactionId) return;
+      var key = 'google-ads-purchase-' + transactionId;
+      if (localStorage.getItem(key)) {
+        console.log('[Google Ads] Conversao ja disparada:', transactionId);
+        return;
+      }
+      localStorage.setItem(key, '1');
+
+      var payload = {
+        send_to: 'AW-18381740709/MSweCMfyvN8cEKW1jL1E',
+        value: Number(data && data.value) || 0,
+        currency: (data && data.currency) || 'BRL',
+        transaction_id: transactionId
+      };
+
+      if (typeof data.newCustomer === 'boolean') {
+        payload.new_customer = data.newCustomer;
+      }
+
+      gtag('event', 'conversion', payload);
+      console.log('[Google Ads] Conversion:', payload);
+    }
+  };
+
   // Evita inicialização duplicada do Pixel no mesmo documento.
   if (window.__META_PIXEL_INITIALIZED__) return;
   window.__META_PIXEL_INITIALIZED__ = true;

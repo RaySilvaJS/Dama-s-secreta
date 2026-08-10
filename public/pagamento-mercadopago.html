@@ -89,6 +89,72 @@
   const errorBox  = document.getElementById('mp-error-box');
   const errorText = document.getElementById('mp-error-text');
 
+  function getCheckoutSummary() {
+    try {
+      return JSON.parse(localStorage.getItem('checkout-summary') || 'null');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function trackApprovedPurchase(statusData) {
+    const summary = getCheckoutSummary();
+    const ids = summary && Array.isArray(summary.produto)
+      ? summary.produto.map((p) => String(p.id)).filter(Boolean)
+      : [];
+    const numItems = summary ? summary.quantidade : 1;
+    const value = summary ? Number(summary.total_final) || 0 : 0;
+    const transactionId = String((statusData && statusData.orderId) || (statusData && statusData.paymentId) || paymentId || '');
+
+    if (window.MetaPixel) {
+      window.MetaPixel.purchase({
+        orderId: transactionId,
+        value,
+        ids,
+        numItems,
+      });
+    }
+
+    if (window.GoogleAds) {
+      window.GoogleAds.purchaseConversion({
+        transactionId,
+        value,
+        currency: 'BRL',
+      });
+    }
+  }
+
+  async function fetchPaymentStatus(showErrorOnFailure) {
+    const r = await fetch('/api/payments/mercado-pago/' + encodeURIComponent(paymentId) + '/status', {
+      headers: { 'x-auth-token': session.token },
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      if (showErrorOnFailure) {
+        showFatalError(data.error || 'Não foi possível carregar este pagamento.');
+      }
+      return null;
+    }
+    return r.json();
+  }
+
+  function startTrackingStatusPolling() {
+    const intervalId = window.setInterval(async () => {
+      try {
+        const data = await fetchPaymentStatus(false);
+        if (!data) return;
+        if (data.status === 'approved') {
+          window.clearInterval(intervalId);
+          trackApprovedPurchase(data);
+          return;
+        }
+        if (data.status === 'rejected' || data.status === 'cancelled' || data.status === 'refunded' || data.status === 'charged_back') {
+          window.clearInterval(intervalId);
+        }
+      } catch (e) {}
+    }, 3000);
+  }
+
   function showFatalError(msg) {
     loadingEl.style.display = 'none';
     errorBox.style.display = 'block';
@@ -107,18 +173,21 @@
 
     // Confirma que o pagamento pertence a este usuário antes de exibir qualquer coisa —
     // o Status Screen Brick por si só não faz esse controle de autorização.
+    let statusData;
     try {
-      const r = await fetch('/api/payments/mercado-pago/' + encodeURIComponent(paymentId) + '/status', {
-        headers: { 'x-auth-token': session.token },
-      });
-      if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
-        showFatalError(data.error || 'Não foi possível carregar este pagamento.');
+      statusData = await fetchPaymentStatus(true);
+      if (!statusData) {
         return;
       }
     } catch (e) {
       showFatalError('Falha de conexão. Tente novamente em instantes.');
       return;
+    }
+
+    if (statusData.status === 'approved') {
+      trackApprovedPurchase(statusData);
+    } else {
+      startTrackingStatusPolling();
     }
 
     let cfg;
