@@ -3,6 +3,27 @@
 // Exemplo: '1234567890123456'
 
 (function () {
+  // Evita inicialização duplicada da Google Tag no mesmo documento.
+  if (!window.__GOOGLE_TAG_INITIALIZED__) {
+    window.__GOOGLE_TAG_INITIALIZED__ = true;
+
+    var GOOGLE_ADS_ID = 'AW-18381740709';
+    var gtagScript = document.createElement('script');
+    gtagScript.async = true;
+    gtagScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + GOOGLE_ADS_ID;
+    document.head.appendChild(gtagScript);
+
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = window.gtag || function () {
+      window.dataLayer.push(arguments);
+    };
+
+    gtag('js', new Date());
+    gtag('config', GOOGLE_ADS_ID);
+
+    console.log('[Google Tag] Inicializada:', GOOGLE_ADS_ID);
+  }
+
   // Evita inicialização duplicada do Pixel no mesmo documento.
   if (window.__META_PIXEL_INITIALIZED__) return;
   window.__META_PIXEL_INITIALIZED__ = true;
