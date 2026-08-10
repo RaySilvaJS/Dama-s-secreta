@@ -3,6 +3,10 @@
 // Exemplo: '1234567890123456'
 
 (function () {
+  // Evita inicialização duplicada do Pixel no mesmo documento.
+  if (window.__META_PIXEL_INITIALIZED__) return;
+  window.__META_PIXEL_INITIALIZED__ = true;
+
   var PIXEL_ID = '1039902935388587';
 
   !function(f,b,e,v,n,t,s){
@@ -19,19 +23,7 @@
 
   console.log('[Meta Pixel] PageView —', window.location.pathname);
 
-  // noscript fallback inserido dinamicamente
-  (function () {
-    var ns = document.createElement('noscript');
-    var img = document.createElement('img');
-    img.height = '1'; img.width = '1'; img.style.display = 'none';
-    img.src = 'https://www.facebook.com/tr?id=' + PIXEL_ID + '&ev=PageView&noscript=1';
-    ns.appendChild(img);
-    if (document.body) {
-      document.body.appendChild(ns);
-    } else {
-      document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(ns); });
-    }
-  })();
+  // Removido fallback
 
   // ===== API PÚBLICA =====
   window.MetaPixel = {
