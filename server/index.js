@@ -85,6 +85,16 @@ const PASSWORD_RESET_PUBLIC_MESSAGE = 'Se existir uma conta associada a este e-m
 const PASSWORD_RESET_INVALID_MESSAGE = 'Este link de recuperação é inválido ou expirou. Solicite um novo link.';
 const PASSWORD_RESET_EMAIL_TIMEOUT_MS = 12000;
 
+const maskEmail = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  const parts = email.split('@');
+  if (parts.length !== 2) return 'email-invalido';
+  const [local, domain] = parts;
+  if (!local) return `***@${domain || 'dominio'}`;
+  const visible = local.length <= 2 ? local[0] : local.slice(0, 2);
+  return `${visible}***@${domain || 'dominio'}`;
+};
+
 const sha256 = (value) => crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 
 const safeHashEquals = (left, right) => {
@@ -197,7 +207,7 @@ const sendPasswordResetEmail = async (toEmail, token) => {
     </div>
   `;
 
-  await transporter.sendMail({
+  return transporter.sendMail({
     from: smtp.from,
     to: toEmail,
     subject: 'Redefinição de senha',
@@ -1365,19 +1375,28 @@ app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (r
   const publicResponse = { success: true, message: PASSWORD_RESET_PUBLIC_MESSAGE };
   const { email } = req.body || {};
   const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const maskedEmail = maskEmail(normalizedEmail);
 
   // Sempre retorna resposta neutra para evitar enumeração de usuários.
   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    console.warn(`[AUTH][FORGOT] Ignorado: e-mail inválido | ip=${ip}`);
     return res.json(publicResponse);
   }
 
   const users = loadUsers();
   const idx = users.findIndex(u => (u.email || '').toLowerCase() === normalizedEmail);
-  if (idx === -1) return res.json(publicResponse);
+  if (idx === -1) {
+    console.log(`[AUTH][FORGOT] E-mail não encontrado | email=${maskedEmail} | ip=${ip}`);
+    return res.json(publicResponse);
+  }
 
   const user = users[idx];
   const isGuestAccount = user.isGuest === true || /^guest_\d+@jessi\.local$/i.test(user.email || '');
-  if (isGuestAccount) return res.json(publicResponse);
+  if (isGuestAccount) {
+    console.log(`[AUTH][FORGOT] Conta guest ignorada | email=${maskedEmail} | ip=${ip}`);
+    return res.json(publicResponse);
+  }
 
   const resetToken = crypto.randomBytes(32).toString('hex');
   users[idx].passwordReset = {
@@ -1389,13 +1408,19 @@ app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (r
   saveUsers(users);
 
   try {
-    await withTimeout(
+    const info = await withTimeout(
       sendPasswordResetEmail(user.email, resetToken),
       PASSWORD_RESET_EMAIL_TIMEOUT_MS,
       'Envio de e-mail de recuperação'
     );
+
+    const acceptedCount = Array.isArray(info?.accepted) ? info.accepted.length : 0;
+    const rejectedCount = Array.isArray(info?.rejected) ? info.rejected.length : 0;
+    console.log(
+      `[AUTH][FORGOT] E-mail processado | email=${maskedEmail} | accepted=${acceptedCount} | rejected=${rejectedCount} | ip=${ip}`
+    );
   } catch (e) {
-    console.error('[AUTH] Falha ao enviar e-mail de recuperação:', e.message);
+    console.error(`[AUTH][FORGOT] Falha ao enviar e-mail | email=${maskedEmail} | ip=${ip} | erro=${e.message}`);
   }
 
   res.json(publicResponse);
