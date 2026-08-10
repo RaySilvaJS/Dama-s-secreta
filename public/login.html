@@ -482,25 +482,33 @@ input.error-input { border-color: var(--red) !important; }
     }
 
     setForgotLoading(true);
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), 15000);
     try {
       const r = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email }),
+        signal: controller.signal
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok || !data.success) {
         showForgotError(data.error || 'Não foi possível processar sua solicitação agora.');
-        setForgotLoading(false);
         return;
       }
 
       showForgotInfo(data.message || 'Se existir uma conta associada a este e-mail, enviaremos um link para redefinir sua senha.');
       forgotForm.reset();
     } catch (err) {
-      showForgotError('Erro de conexão. Tente novamente.');
+      if (err && err.name === 'AbortError') {
+        showForgotError('A solicitação demorou demais. Verifique o SMTP e tente novamente.');
+      } else {
+        showForgotError('Erro de conexão. Tente novamente.');
+      }
+    } finally {
+      clearTimeout(requestTimeout);
+      setForgotLoading(false);
     }
-    setForgotLoading(false);
   });
 
   form.addEventListener('submit', async function (e) {

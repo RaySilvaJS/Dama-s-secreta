@@ -83,6 +83,7 @@ const validateCPF = (cpf) => {
 const PASSWORD_RESET_TTL_MS = 20 * 60 * 1000;
 const PASSWORD_RESET_PUBLIC_MESSAGE = 'Se existir uma conta associada a este e-mail, enviaremos um link para redefinir sua senha.';
 const PASSWORD_RESET_INVALID_MESSAGE = 'Este link de recuperação é inválido ou expirou. Solicite um novo link.';
+const PASSWORD_RESET_EMAIL_TIMEOUT_MS = 12000;
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 
@@ -125,6 +126,20 @@ const buildResetPasswordUrl = (token) => {
   return `${appUrl}/reset-password.html?token=${encodeURIComponent(token)}`;
 };
 
+const withTimeout = (promise, timeoutMs, label) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} excedeu ${timeoutMs}ms`)), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+
 const sendPasswordResetEmail = async (toEmail, token) => {
   if (!isSmtpConfigured()) {
     throw new Error('SMTP não configurado. Verifique variáveis SMTP_* e MAIL_FROM.');
@@ -148,6 +163,9 @@ const sendPasswordResetEmail = async (toEmail, token) => {
     host: smtp.host,
     port,
     secure,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
     auth: {
       user: smtp.user,
       pass: smtp.pass,
@@ -1371,7 +1389,11 @@ app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (r
   saveUsers(users);
 
   try {
-    await sendPasswordResetEmail(user.email, resetToken);
+    await withTimeout(
+      sendPasswordResetEmail(user.email, resetToken),
+      PASSWORD_RESET_EMAIL_TIMEOUT_MS,
+      'Envio de e-mail de recuperação'
+    );
   } catch (e) {
     console.error('[AUTH] Falha ao enviar e-mail de recuperação:', e.message);
   }
