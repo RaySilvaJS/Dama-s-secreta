@@ -95,6 +95,21 @@ const maskEmail = (value) => {
   return `${visible}***@${domain || 'dominio'}`;
 };
 
+const getEmailDomain = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  return at > 0 ? email.slice(at + 1) : '';
+};
+
+const serializeSmtpError = (error) => ({
+  message: error?.message || 'Erro SMTP desconhecido',
+  code: error?.code || null,
+  command: error?.command || null,
+  responseCode: error?.responseCode || null,
+  response: error?.response || null,
+  errno: error?.errno || null,
+});
+
 const sha256 = (value) => crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
 
 const safeHashEquals = (left, right) => {
@@ -164,9 +179,15 @@ const sendPasswordResetEmail = async (toEmail, token) => {
   const secureRaw = smtp.secureRaw;
   const secure = secureRaw === 'true' || secureRaw === '1';
   const port = Number(smtp.port || (secure ? 465 : 587));
+  const userDomain = getEmailDomain(smtp.user);
+  const fromDomain = getEmailDomain((smtp.from.match(/<([^>]+)>/) || [])[1] || smtp.from);
 
   if (!Number.isFinite(port) || port <= 0) {
     throw new Error('SMTP_PORT inválida.');
+  }
+
+  if (userDomain && fromDomain && userDomain !== fromDomain) {
+    console.warn(`[AUTH][SMTP] Atenção: domínio do SMTP_USER difere do MAIL_FROM | smtpUserDomain=${userDomain} | fromDomain=${fromDomain}`);
   }
 
   const transporter = nodemailer.createTransport({
@@ -181,6 +202,16 @@ const sendPasswordResetEmail = async (toEmail, token) => {
       pass: smtp.pass,
     }
   });
+
+  console.log(`[AUTH][SMTP] Tentando envio de recuperação | host=${smtp.host} | port=${port} | secure=${secure} | userDomain=${userDomain || 'n/a'} | fromDomain=${fromDomain || 'n/a'} | to=${maskEmail(toEmail)}`);
+
+  await withTimeout(
+    transporter.verify(),
+    PASSWORD_RESET_EMAIL_TIMEOUT_MS,
+    'Verificação SMTP (verify)'
+  );
+
+  console.log(`[AUTH][SMTP] Verify OK | host=${smtp.host} | port=${port} | secure=${secure}`);
 
   const text = [
     'Recebemos uma solicitação para redefinir a senha da sua conta.',
@@ -207,13 +238,28 @@ const sendPasswordResetEmail = async (toEmail, token) => {
     </div>
   `;
 
-  return transporter.sendMail({
+  const info = await transporter.sendMail({
     from: smtp.from,
     to: toEmail,
     subject: 'Redefinição de senha',
     text,
     html,
   });
+
+  console.log('[AUTH][SMTP] sendMail resultado:', {
+    messageId: info?.messageId || null,
+    accepted: Array.isArray(info?.accepted) ? info.accepted.map(maskEmail) : [],
+    rejected: Array.isArray(info?.rejected) ? info.rejected.map(maskEmail) : [],
+    response: info?.response || null,
+    envelope: info?.envelope
+      ? {
+          from: maskEmail(info.envelope.from),
+          to: Array.isArray(info.envelope.to) ? info.envelope.to.map(maskEmail) : [],
+        }
+      : null,
+  });
+
+  return info;
 };
 
 // Busca índice do usuário pelo token — suporta sessions[] (multi-dispositivo) e legacy token
@@ -1420,7 +1466,11 @@ app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (r
       `[AUTH][FORGOT] E-mail processado | email=${maskedEmail} | accepted=${acceptedCount} | rejected=${rejectedCount} | ip=${ip}`
     );
   } catch (e) {
-    console.error(`[AUTH][FORGOT] Falha ao enviar e-mail | email=${maskedEmail} | ip=${ip} | erro=${e.message}`);
+    console.error('[AUTH][FORGOT] Falha ao enviar e-mail:', {
+      email: maskedEmail,
+      ip,
+      smtpError: serializeSmtpError(e),
+    });
   }
 
   res.json(publicResponse);
