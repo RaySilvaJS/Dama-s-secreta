@@ -22,6 +22,7 @@ const paymentRouter = require('./payment');
 const mercadoPagoOrdersRouter = require('./mercadoPagoOrders');
 const mercadoPagoWebhookRouter = require('./mercadoPagoWebhook');
 const adminRouter = require('./admin');
+const seoRouter = require('./seo');
 const { loadConfig, loadSecurity, saveSecurity } = require('./admin');
 const { initWhatsApp, sendPaymentRequest } = require('./whatsapp');
 const { v4: uuidv4 } = require('uuid');
@@ -337,6 +338,8 @@ const requireAdmin = (req, res, next) => {
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
+
+app.use('/', seoRouter);
 
 // Admin API (before maintenance middleware so panel always works)
 app.use('/api/admin', adminRouter);
