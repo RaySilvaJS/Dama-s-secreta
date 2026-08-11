@@ -57,6 +57,45 @@ const getRuntimeSmtpConfig = () => {
   return { host, port, secureRaw, user, pass, from, appUrl };
 };
 
+const extractEmailAddress = (value) => {
+  const raw = String(value || '').trim();
+  const angleMatch = raw.match(/<([^>]+)>/);
+  return String(angleMatch?.[1] || raw).trim().toLowerCase();
+};
+
+const getEmailDomain = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  return at > 0 ? email.slice(at + 1) : '';
+};
+
+const resolveSmtpSender = (smtp) => {
+  const fromAddress = extractEmailAddress(smtp.from);
+  const userAddress = extractEmailAddress(smtp.user);
+  const fromDomain = getEmailDomain(fromAddress);
+  const userDomain = getEmailDomain(userAddress);
+
+  if (fromAddress && userAddress && fromDomain && userDomain && fromDomain !== userDomain) {
+    return {
+      from: userAddress,
+      replyTo: smtp.from,
+      normalized: true,
+      reason: 'from_domain_mismatch',
+      fromDomain,
+      userDomain,
+    };
+  }
+
+  return {
+    from: smtp.from,
+    replyTo: null,
+    normalized: false,
+    reason: null,
+    fromDomain,
+    userDomain,
+  };
+};
+
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
 // ---- Admin auth middleware ----
@@ -949,6 +988,7 @@ router.post('/smtp-test', adminAuth, async (req, res) => {
   const smtp = getRuntimeSmtpConfig();
   const secure = smtp.secureRaw === 'true' || smtp.secureRaw === '1';
   const port = Number(smtp.port || (secure ? 465 : 587));
+  const sender = resolveSmtpSender(smtp);
 
   if (!smtp.host || !smtp.user || !smtp.pass || !smtp.from || !Number.isFinite(port) || port <= 0) {
     return res.status(400).json({
@@ -974,7 +1014,8 @@ router.post('/smtp-test', adminAuth, async (req, res) => {
     await transporter.verify();
 
     const info = await transporter.sendMail({
-      from: smtp.from,
+      from: sender.from,
+      ...(sender.replyTo ? { replyTo: sender.replyTo } : {}),
       to,
       subject: 'Teste SMTP - LUAR SEDUCAO',
       text: [
@@ -1004,7 +1045,20 @@ router.post('/smtp-test', adminAuth, async (req, res) => {
       messageId: info.messageId || null,
       accepted: info.accepted || [],
       rejected: info.rejected || [],
-      warning: smtp.appUrl ? null : 'APP_URL nao configurada. O teste SMTP funciona, mas o link de recuperacao pode falhar.'
+      warning: (() => {
+        const warnings = [];
+        if (!smtp.appUrl) warnings.push('APP_URL nao configurada. O teste SMTP funciona, mas o link de recuperacao pode falhar.');
+        if (sender.normalized) warnings.push('MAIL_FROM tem dominio diferente do SMTP_USER. Ajuste automatico aplicado para reduzir rejeicao em Gmail.');
+        return warnings.length ? warnings.join(' ') : null;
+      })(),
+      sender: {
+        from: sender.from,
+        replyTo: sender.replyTo,
+        normalized: sender.normalized,
+        reason: sender.reason,
+        fromDomain: sender.fromDomain,
+        userDomain: sender.userDomain,
+      },
     });
   } catch (e) {
     console.error('[SMTP-TEST] Falha no teste SMTP:', e.message);

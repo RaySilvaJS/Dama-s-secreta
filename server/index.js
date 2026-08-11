@@ -102,6 +102,39 @@ const getEmailDomain = (value) => {
   return at > 0 ? email.slice(at + 1) : '';
 };
 
+const extractEmailAddress = (value) => {
+  const raw = String(value || '').trim();
+  const angleMatch = raw.match(/<([^>]+)>/);
+  return String(angleMatch?.[1] || raw).trim().toLowerCase();
+};
+
+const resolveSmtpSender = (smtp) => {
+  const fromAddress = extractEmailAddress(smtp.from);
+  const userAddress = extractEmailAddress(smtp.user);
+  const fromDomain = getEmailDomain(fromAddress);
+  const userDomain = getEmailDomain(userAddress);
+
+  if (fromAddress && userAddress && fromDomain && userDomain && fromDomain !== userDomain) {
+    return {
+      from: userAddress,
+      replyTo: smtp.from,
+      normalized: true,
+      reason: 'from_domain_mismatch',
+      fromDomain,
+      userDomain,
+    };
+  }
+
+  return {
+    from: smtp.from,
+    replyTo: null,
+    normalized: false,
+    reason: null,
+    fromDomain,
+    userDomain,
+  };
+};
+
 const serializeSmtpError = (error) => ({
   message: error?.message || 'Erro SMTP desconhecido',
   code: error?.code || null,
@@ -180,15 +213,14 @@ const sendPasswordResetEmail = async (toEmail, token) => {
   const secureRaw = smtp.secureRaw;
   const secure = secureRaw === 'true' || secureRaw === '1';
   const port = Number(smtp.port || (secure ? 465 : 587));
-  const userDomain = getEmailDomain(smtp.user);
-  const fromDomain = getEmailDomain((smtp.from.match(/<([^>]+)>/) || [])[1] || smtp.from);
+  const sender = resolveSmtpSender(smtp);
 
   if (!Number.isFinite(port) || port <= 0) {
     throw new Error('SMTP_PORT inválida.');
   }
 
-  if (userDomain && fromDomain && userDomain !== fromDomain) {
-    console.warn(`[AUTH][SMTP] Atenção: domínio do SMTP_USER difere do MAIL_FROM | smtpUserDomain=${userDomain} | fromDomain=${fromDomain}`);
+  if (sender.normalized) {
+    console.warn(`[AUTH][SMTP] Ajuste automático do remetente para melhorar entregabilidade | smtpUserDomain=${sender.userDomain} | fromDomain=${sender.fromDomain} | action=from:=SMTP_USER,replyTo:=MAIL_FROM`);
   }
 
   const transporter = nodemailer.createTransport({
@@ -204,7 +236,7 @@ const sendPasswordResetEmail = async (toEmail, token) => {
     }
   });
 
-  console.log(`[AUTH][SMTP] Tentando envio de recuperação | host=${smtp.host} | port=${port} | secure=${secure} | userDomain=${userDomain || 'n/a'} | fromDomain=${fromDomain || 'n/a'} | to=${maskEmail(toEmail)}`);
+  console.log(`[AUTH][SMTP] Tentando envio de recuperação | host=${smtp.host} | port=${port} | secure=${secure} | userDomain=${sender.userDomain || 'n/a'} | fromDomain=${sender.fromDomain || 'n/a'} | normalizedFrom=${sender.normalized} | to=${maskEmail(toEmail)}`);
 
   await withTimeout(
     transporter.verify(),
@@ -240,7 +272,8 @@ const sendPasswordResetEmail = async (toEmail, token) => {
   `;
 
   const info = await transporter.sendMail({
-    from: smtp.from,
+    from: sender.from,
+    ...(sender.replyTo ? { replyTo: sender.replyTo } : {}),
     to: toEmail,
     subject: 'Redefinição de senha',
     text,
@@ -252,6 +285,12 @@ const sendPasswordResetEmail = async (toEmail, token) => {
     accepted: Array.isArray(info?.accepted) ? info.accepted.map(maskEmail) : [],
     rejected: Array.isArray(info?.rejected) ? info.rejected.map(maskEmail) : [],
     response: info?.response || null,
+    sender: {
+      from: sender.from,
+      replyTo: sender.replyTo,
+      normalized: sender.normalized,
+      reason: sender.reason,
+    },
     envelope: info?.envelope
       ? {
           from: maskEmail(info.envelope.from),
