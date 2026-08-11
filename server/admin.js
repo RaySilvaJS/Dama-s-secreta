@@ -1017,16 +1017,18 @@ router.post('/smtp-test', adminAuth, async (req, res) => {
       from: sender.from,
       ...(sender.replyTo ? { replyTo: sender.replyTo } : {}),
       to,
-      subject: 'Teste SMTP - LUAR SEDUCAO',
+      subject: "DAMA'S SECRETA - Confirmacao de contato",
       text: [
-        'Teste de envio SMTP realizado pelo painel DevOps.',
+        "Confirmamos o recebimento do seu e-mail de contato.",
+        'Esta e uma mensagem automatica de validacao do sistema.',
         `Data: ${new Date().toISOString()}`,
         smtp.appUrl ? `APP_URL ativa: ${smtp.appUrl}` : 'APP_URL nao configurada no momento.'
       ].join('\n'),
       html: `
         <div style="font-family:Arial,sans-serif;line-height:1.5;padding:16px;color:#222;">
-          <h2 style="margin:0 0 10px;">Teste SMTP - LUAR SEDUCAO</h2>
-          <p style="margin:0 0 8px;">Se voce recebeu este e-mail, o SMTP esta funcionando.</p>
+          <h2 style="margin:0 0 10px;">DAMA'S SECRETA - Confirmacao de contato</h2>
+          <p style="margin:0 0 8px;">Recebemos e validamos sua mensagem de contato.</p>
+          <p style="margin:0 0 8px;">Esta entrega foi enviada pelo sistema para verificacao de comunicacao.</p>
           <p style="margin:0;color:#555;">Data: ${new Date().toISOString()}</p>
         </div>
       `
