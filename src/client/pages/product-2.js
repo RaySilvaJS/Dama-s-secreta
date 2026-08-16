@@ -73,14 +73,11 @@
     const sizeForSeo = p.size || p.storage || p.specs?.['Tamanho'] || p.specs?.['Memória interna'] || '';
     const title = `${p.name} — DAMA'S SECRETA`;
     const desc = `${p.condition} · Tamanho ${sizeForSeo || 'unico'} · ${p.color || ''} · ${fmt(p.price)} em até 12x sem juros. ${(p.description || '').slice(0, 120)}...`;
-    const canonicalHref = `${window.location.origin}/product.html?id=${encodeURIComponent(p.id || PRODUCT_ID || '')}`;
     document.getElementById('page-title').textContent = title;
     document.getElementById('meta-desc').content = desc;
     document.getElementById('og-title').content = title;
     document.getElementById('og-desc').content = desc;
     if (imgSrc) document.getElementById('og-image').content = imgSrc;
-    const canonicalLink = document.getElementById('canonical-link');
-    if (canonicalLink) canonicalLink.href = canonicalHref;
 
     const existing = document.getElementById('json-ld');
     const schema = {
@@ -88,7 +85,7 @@
       '@type': 'Product',
       name: p.name,
       description: (p.description || '').slice(0, 500),
-      brand: { '@type': 'Brand', name: p.specs?.Marca || p.specs?.Fabricante || p.brand || "DAMA'S SECRETA" },
+      brand: { '@type': 'Brand', name: p.specs?.Marca || 'Apple' },
       sku: p.id,
       offers: {
         '@type': 'Offer',
