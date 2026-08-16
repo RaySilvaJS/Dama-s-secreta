@@ -8,6 +8,11 @@ class ResultsManager {
     this.filtersText    = document.getElementById('filters-text');
     this.sortOptions    = document.querySelectorAll('.sort-dropdown__option');
     this.currentSort    = 'popularity';
+
+    if (!this.sortDropdown || !this.sortTrigger || !this.sortMenu || !this.productCountEl || !this.resultsSection || !this.filtersText) {
+      return;
+    }
+
     this.initEvents();
   }
   initEvents() {
