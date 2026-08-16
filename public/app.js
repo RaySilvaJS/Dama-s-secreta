@@ -196,17 +196,7 @@ function getRating(rating, reviews) {
 }
 
 function getPromotionText(product) {
-  const promotions = [
-    `${ICONS.gift} Ganhe AirPods na compra`,
-    `${ICONS.truck} Envio grátis`,
-    `${ICONS.lock} Garantia de 12 meses`,
-    `${ICONS.zap} Entrega rápida`,
-  ];
-
-  if (product.isPromo) return promotions[0];
-  if (product.isNew) return promotions[3];
-  const index = product.id ? product.id.toString().length % promotions.length : 0;
-  return promotions[index];
+  return '';
 }
 
 const parseDescriptionSections = (description) => {
@@ -357,7 +347,7 @@ const _buildProductCardHTML = (product) => {
   const extras = getOrCreateCardExtras(product.id);
   const { brinde, descontoHoje, freteGratis, stock } = extras;
   const precoOriginal = product.price;
-  const precoFinal = precoOriginal * (1 - descontoHoje / 100);
+  const precoFinal = precoOriginal * (1 - (Number(descontoHoje) || 0) / 100);
   const isIphone = !!(product.name && product.name.toLowerCase().includes('iphone'));
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
   const isLowStock = Number(stock) <= 5;
@@ -393,7 +383,7 @@ const _buildProductCardHTML = (product) => {
 
       <p class="olx-adcard__sku">Código/SKU: ${product.id}</p>
 
-      ${isIphone ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
+      ${Number(descontoHoje) > 0 && isIphone ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
 
       <div class="olx-adcard__seller-info">
         <span class="seller-name">${seller}</span>
@@ -413,17 +403,6 @@ const _buildProductCardHTML = (product) => {
         <span class="entrega-full-text">Entrega até no dia seguinte</span>
         <span class="entrega-full-pill">FULL</span>
       </div>
-
-      ${isIphone ? `<div class="brinde-line">${ICONS.gift} Brinde: ${brinde}</div>` : ''}
-
-      ${isIphone && freteGratis ? `<span class="frete-gratis-wrap">
-        <span class="polylabel-pill polylabel-fw-semibold" style="color:#00A650;background-color:#E5F6ED">
-          Chegará grátis sexta-feira — 1ª compra
-        </span>
-        <svg aria-label="Enviado pelo FULL" role="img" class="polylabel-icon" width="44" height="14" viewBox="0 0 41 13" style="--polylabel-icon-half-height:7px">
-          <use href="#poly_full"></use>
-        </svg>
-      </span>` : ''}
 
       <div class="olx-adcard__location-date">
         <p class="olx-adcard__location">${ICONS.mapPin} Brasil</p>

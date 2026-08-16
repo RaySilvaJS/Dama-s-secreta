@@ -36,8 +36,10 @@ const normalizeCartProduct = (product) => {
 
   // [LOJA OFICIAL] Aplica desconto ao preço e preserva campos de extras no item do carrinho
   const precoOriginal = Number(product.price ?? product.preco ?? 0);
-  const descontoHoje = product.descontoHoje || 0;
+  const descontoHoje = Number(product.descontoHoje || 0) > 0 ? Number(product.descontoHoje) : 0;
   const precoFinal = descontoHoje > 0 ? precoOriginal * (1 - descontoHoje / 100) : precoOriginal;
+  const showBrinde = Boolean(product.brinde) && descontoHoje > 0;
+  const showFreteGratis = Boolean(product.freteGratis) && descontoHoje > 0;
 
   return {
     id: product.id,
@@ -45,9 +47,9 @@ const normalizeCartProduct = (product) => {
     preco: precoFinal,
     precoOriginal: descontoHoje > 0 ? precoOriginal : null,
     descontoHoje,
-    brinde: product.brinde || null,
-    freteGratis: product.freteGratis || false,
-    retiradaDisponivel: product.retiradaDisponivel === true,
+    brinde: showBrinde ? product.brinde : null,
+    freteGratis: showFreteGratis ? product.freteGratis : false,
+    retiradaDisponivel: product.retiradaDisponivel === true && descontoHoje > 0,
     imagem: image,
     quantidade: 1,
   };
@@ -184,8 +186,8 @@ function renderCartDrawer() {
       <img src="${item.imagem}" alt="${item.nome}" />
       <div class="item-info">
         <h4>${item.nome}</h4>
-        ${item.descontoHoje ? `<p style="color:#856404;font-size:10px;font-weight:700;background:#FFF3CD;padding:1px 5px;border-radius:3px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${item.descontoHoje}% OFF</p>` : ''}
-        ${item.brinde ? `<p style="color:#16A34A;font-size:11px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> ${item.brinde}</p>` : ''}
+        ${Number(item.descontoHoje || 0) > 0 ? `<p style="color:#856404;font-size:10px;font-weight:700;background:#FFF3CD;padding:1px 5px;border-radius:3px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${item.descontoHoje}% OFF</p>` : ''}
+        ${item.brinde && Number(item.descontoHoje || 0) > 0 ? `<p style="color:#16A34A;font-size:11px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> ${item.brinde}</p>` : ''}
         ${item.retiradaDisponivel ? `<p style="color:#065F46;font-size:11px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Retirada disponível</p>` : ''}
         <p>${precoUn}</p>
         <div class="quantity-control">

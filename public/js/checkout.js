@@ -73,10 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <img src="${esc(item.imagem)}" alt="${esc(item.nome)}" style="width:62px;height:62px;object-fit:contain;border:1px solid #E5E7EB;border-radius:8px;background:#FAFAFA;padding:4px;flex-shrink:0"/>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${esc(item.nome)}</div>
-          ${item.descontoHoje ? `<div style="font-size:11px;color:#16A34A;font-weight:700">${item.descontoHoje}% OFF hoje</div>` : ''}
-          ${item.brinde ? `<div style="font-size:11px;color:#16A34A;font-weight:700">Brinde: ${esc(item.brinde)}</div>` : ''}
-          ${item.freteGratis && isPrimeiraCompra ? `<div style="font-size:11px;color:#16A34A;font-weight:700">Frete grátis (1ª compra)</div>` : ''}
-          ${item.retiradaDisponivel ? `<div style="font-size:11px;color:#065F46;font-weight:700">Retirada disponível</div>` : ''}
+          ${Number(item.descontoHoje || 0) > 0 ? `<div style="font-size:11px;color:#16A34A;font-weight:700">${item.descontoHoje}% OFF hoje</div>` : ''}
           <div style="font-size:12px;color:#6B7280;margin-top:3px">Qtd: ${item.quantidade}</div>
         </div>
         <div style="font-size:15px;font-weight:800;color:#111827;flex-shrink:0">${fmt(item.preco * item.quantidade)}</div>
