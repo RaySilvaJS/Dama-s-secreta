@@ -488,286 +488,142 @@
     const isValidImg = (s) => typeof s === 'string' && s.length > 4 && (s.startsWith('http') || s.startsWith('/uploads/'));
 
     const images = (Array.isArray(product.images) ? product.images : []).filter(isValidImg);
-    const reviewImgs = (Array.isArray(product.reviewsList) ? product.reviewsList : [])
-      .flatMap(r => Array.isArray(r.images) ? r.images : []).filter(isValidImg);
-    const detailImages = Array.isArray(product.detailImages) ? product.detailImages.filter(isValidImg) : [];
     const heroSrc = images[0] || '';
     const specs = product.specs || {};
-
-    const extras = typeof getOrCreateCardExtras === 'function'
-      ? getOrCreateCardExtras(product.id)
-      : { descontoHoje: 0, brinde: null, freteGratis: false, retiradaDisponivel: false, stock: Math.floor(Math.random() * 50) + 1 };
-
-    const colorValue = String(
-      product.color ||
-      specs['Cor'] ||
-      specs['Cor principal'] ||
-      specs['Cor do produto'] ||
-      ''
-    ).trim() || 'Unica';
-
-    const sizeValue = String(
-      product.size ||
-      product.storage ||
-      specs['Tamanho'] ||
-      specs['Memória interna'] ||
-      ''
-    ).trim() || 'Unico';
-
-    const hasGift = Boolean(String(extras.brinde || '').trim()) && Number(extras.descontoHoje || 0) > 0;
-    const hasFreeShipping = Boolean(extras.freteGratis || product.free_shipping) && Number(extras.descontoHoje || 0) > 0;
-    const hasPickup = Boolean(extras.retiradaGratis || extras.retiradaDisponivel) && Number(extras.descontoHoje || 0) > 0;
-
-    const isUnavailable = product.sold === true || Number(product.stock) <= 0;
-    const mlPrice = product.price;
-    const basePrice = storeDiscount > 0
-      ? Math.round(mlPrice * (1 - storeDiscount / 100) * 100) / 100
-      : mlPrice;
-    const originalPrice = storeDiscount > 0 ? mlPrice : (product.priceOriginal || mlPrice);
-    const promoPercent = storeDiscount > 0 ? storeDiscount : (product.promoPercent || Math.round((1 - mlPrice / (product.priceOriginal || mlPrice)) * 100));
-    const installment = (basePrice / 12).toFixed(2).replace('.', ',');
-
-    const mlUrl = product.url ||
-      (String(product.id || '').startsWith('MLB') ? 'https://www.mercadolivre.com.br/p/' + product.id : '');
-    const showMlCard = storeDiscount > 0;
+    const productPrice = Number(product.price || 0);
+    const priceOriginal = Number(product.priceOriginal || productPrice || 0);
+    const effectivePrice = storeDiscount > 0 ? productPrice * (1 - storeDiscount / 100) : productPrice;
+    const promoPercent = storeDiscount > 0 ? storeDiscount : (product.promoPercent || (priceOriginal > 0 ? Math.round((1 - productPrice / priceOriginal) * 100) : 0));
+    const priceText = fmt(effectivePrice || 0);
+    const oldPriceText = priceOriginal > 0 && priceOriginal !== effectivePrice ? fmt(priceOriginal) : '';
+    const installmentText = (effectivePrice / 12).toFixed(2).replace('.', ',');
+    const colorValue = String(product.color || specs['Cor'] || specs['Cor principal'] || specs['Cor do produto'] || '').trim() || 'Única';
+    const sizeValue = String(product.size || product.storage || specs['Tamanho'] || specs['Memória interna'] || '').trim() || 'Único';
 
     updateSEO(product, heroSrc);
 
-    const reviewsList = Array.isArray(product.reviewsList) ? product.reviewsList : [];
-    const dist = [5, 4, 3, 2, 1].map(star => ({
-      star,
-      count: reviewsList.filter(r => Math.round(r.rating) === star).length
-    }));
-
-    const customerImgs = reviewsList
-      .flatMap(r => Array.isArray(r.images) ? r.images : [])
-      .filter(u => typeof u === 'string' && u.startsWith('http'));
-
-    const HL_SPECS = [
-      { label: 'Tela', key: 'Tamanho da tela', icon: IC.monitor },
-      { label: 'Memória', key: 'Memória interna', icon: IC.memory },
-      { label: 'RAM', key: 'Memória RAM', icon: IC.cpu },
-      { label: 'Rede', key: 'Rede móvel', icon: IC.network },
-      { label: 'Processador', key: 'Velocidade do processador', icon: IC.zap },
-      { label: 'Câmera', key: 'Resolução da câmera traseira principal', icon: IC.camera },
-      { label: 'Bateria', key: 'Tipo de bateria', icon: IC.battery },
-      { label: 'Face ID', key: 'Com reconhecimento facial', icon: IC.face },
-    ];
-
     const specEntries = Object.entries(specs);
-    const VISIBLE_ROWS = 8;
-
-    const rawName = String(product.name || '');
-    const rawNameLower = rawName.toLowerCase();
-    const brandFromSpecs = String(specs?.Marca || specs?.Fabricante || '').trim();
-    const inferBrand = () => {
-      if (brandFromSpecs) return brandFromSpecs;
-      if (/\bapple\b|\biphone\b|\bipad\b|\bmacbook\b/i.test(rawNameLower)) return 'Apple';
-      if (/\bsamsung\b|\bgalaxy\b/i.test(rawNameLower)) return 'Samsung';
-      if (/\bxiaomi\b|\bredmi\b|\bpoco\b/i.test(rawNameLower)) return 'Xiaomi';
-      if (/\bmotorola\b|\bmoto\b/i.test(rawNameLower)) return 'Motorola';
-      return 'Marcas';
-    };
-
-    const inferCategory = () => {
-      if (/\biphone\b|\bsmartphone\b|\bcelular\b|\bgalaxy\b|\bredmi\b|\bmoto\b/i.test(rawNameLower)) return 'Celulares';
-      if (/\bwatch\b|\bsmartwatch\b|\brel[oó]gio\b/i.test(rawNameLower)) return 'Smartwatches';
-      if (/\bmacbook\b|\bnotebook\b|\blaptop\b|\bpc\b/i.test(rawNameLower)) return 'Informática';
-      if (/\bairpods\b|\bfone\b|\bcabo\b|\bcarregador\b|\bcapa\b|\bcase\b|\bacess[oó]rio\b/i.test(rawNameLower)) return 'Acessórios';
-      return 'Produtos';
-    };
-
-    const breadcrumbCategory = inferCategory();
-    const breadcrumbBrand = inferBrand();
+    const reviewsList = Array.isArray(product.reviewsList) ? product.reviewsList : [];
 
     const html = `
-      <nav class="breadcrumb" aria-label="Navegação">
+      <nav class="breadcrumb" aria-label="Navegação produto">
         <a href="index.html">Home</a>
         <span class="breadcrumb-sep">/</span>
-        <a href="index.html">${breadcrumbCategory}</a>
-        <span class="breadcrumb-sep">/</span>
-        <a href="index.html">${breadcrumbBrand}</a>
-        <span class="breadcrumb-sep">/</span>
-        <span class="breadcrumb-current">${product.name}</span>
+        <span class="breadcrumb-current">${product.name || 'Produto'}</span>
       </nav>
 
-      <div class="product-top-grid">
-        <section class="gallery-panel" aria-label="Galeria de imagens">
-          <div class="gallery-card">
-            <div class="gallery-main">
-              <button class="gallery-fab gallery-fab-heart" id="fav-btn" title="Favoritar"
-                onclick="toggleFav('${product.id}', this)"
-                style="color:${getFavs().includes(product.id) ? '#DC2626' : 'inherit'}">
-                ${IC.heart}
-              </button>
-              <button class="gallery-fab gallery-fab-share" title="Compartilhar"
-                onclick="if(navigator.share){navigator.share({title:'${product.name}',url:window.location.href})}else{navigator.clipboard&&navigator.clipboard.writeText(window.location.href);alert('Link copiado!')}">
-                ${IC.share}
-              </button>
-              ${images.length ? `
-                <button class="gallery-nav-btn prev" id="gallery-prev" aria-label="Imagem anterior">${IC.chevL}</button>
-                <img id="hero-img" src="${heroSrc}" alt="${product.name}" style="cursor:zoom-in;"/>
-                <button class="gallery-nav-btn next" id="gallery-next" aria-label="Próxima imagem">${IC.chevR}</button>
-              ` : `<div class="gallery-empty"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Imagem não disponível</span></div>`}
+      <div class="shop-product-shell">
+        <div class="shop-product-layout">
+          <div class="shop-gallery">
+            <div class="shop-gallery-main">
+              <img src="${heroSrc || 'https://via.placeholder.com/900x900?text=Produto'}" alt="${product.name || 'Produto'}" id="shop-main-image" />
             </div>
-            <div class="gallery-thumbs" id="gallery-thumbs"${images.length <= 1 ? ' style="display:none"' : ''}>
-              ${images.length > 1 ? images.map((src, i) => `
-                <button class="thumb-btn${i===0?' active':''}" aria-label="Miniatura ${i+1}">
-                  <img src="${src}" alt="Miniatura ${i+1}" loading="${i===0?'eager':'lazy'}"/>
-                </button>`).join('') : ''}
-            </div>
-          </div>
-        </section>
-
-        <aside class="sidebar-panel">
-          <div class="card">
-            <div class="product-condition-row">
-              <span class="badge-condition">${product.condition || 'Novo'}</span>
-            </div>
-            <h1 class="product-name">${product.name}</h1>
-            ${(product.reviews||0) > 0 ? `<a href="#" class="review-anchor-link" onclick="event.preventDefault();document.getElementById('reviews-title')?.scrollIntoView({behavior:'smooth'})">${starsHtml(product.rating||5, '.9rem')} ${(product.reviews||0).toLocaleString('pt-BR')} avaliações · Ver todas</a>` : ''}
-            <div class="seller-row">
-              Vendido por <strong>${product.seller || "DAMA'S SECRETA"}</strong>
-              <span class="seller-verified"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Vendedor verificado</span>
+            <div class="shop-gallery-thumbs">
+              ${(images.length ? images : ['https://via.placeholder.com/900x900?text=Produto']).map((src, index) => `
+                <button type="button" class="shop-thumb ${index === 0 ? 'active' : ''}" data-image="${src}" aria-label="Ver imagem ${index + 1}">
+                  <img src="${src}" alt="Miniatura ${index + 1}" loading="lazy" />
+                </button>
+              `).join('')}
             </div>
           </div>
 
-          <div class="card">
-            <div class="price-main-row">
-              <div class="price-current" id="price-current">${fmt(basePrice)}</div>
+          <div class="shop-product-card">
+            <div class="shop-product-badges">
+              <span class="chip accent">${product.condition || 'Novo'}</span>
+              <span class="chip">${Number(product.stock || 0) > 0 ? 'Em estoque' : 'Sem estoque'}</span>
+              ${promoPercent > 0 ? `<span class="chip success">${promoPercent}% OFF</span>` : ''}
             </div>
-            <div class="installment-row" id="price-installment">
-              ${IC.card} ou em até <strong>12x de R$ ${installment}</strong> sem juros
-            </div>
-            <p class="shipping-calc">${IC.truck} Calcule o frete na finalização da compra</p>
-          </div>
 
-          <div class="card" id="variations-card">
-            <div style="margin-bottom:14px;">
-              <div class="section-label">Cor</div>
-              <div class="variation-chips">
-                <button class="variation-chip active">${colorValue}</button>
-              </div>
-            </div>
-            <div>
-              <div class="section-label">Tamanho</div>
-              <div class="variation-chips">
-                <button class="variation-chip active">${sizeValue}</button>
-              </div>
-            </div>
-          </div>
+            <h1 class="shop-product-title">${product.name || 'Produto'}</h1>
 
-          <div class="card" id="stock-display" style="padding:14px 18px;">
-            <div class="stock-row">
-              ${isUnavailable
-                ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Produto esgotado</span>`
-                : extras.stock <= 5
-                  ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Últimas ${extras.stock} unidade${extras.stock > 1 ? 's' : ''} disponível${extras.stock > 1 ? 'is' : ''}!</span>`
-                  : `<span class="stock-dot ok"></span><span style="color:var(--green);">Em estoque — ${extras.stock} disponível${extras.stock > 1 ? 'is' : ''}</span>`}
+            <div class="shop-meta-row">
+              <span class="shop-stars">${'★'.repeat(Math.max(1, Math.min(5, Math.round(Number(product.rating || 5)))))}${'☆'.repeat(5 - Math.max(1, Math.min(5, Math.round(Number(product.rating || 5)))))} </span>
+              <span>${Number(product.rating || 5).toFixed(1)}</span>
+              <span class="shop-divider">•</span>
+              <span>${Number(product.reviews || 0).toLocaleString('pt-BR')} avaliações</span>
             </div>
-          </div>
 
-          <div class="card">
-            <div class="actions-grid">
-              ${isUnavailable
-                ? `<button class="btn btn-secondary" disabled style="opacity:.6;cursor:not-allowed;grid-column:1/-1;">Produto Esgotado</button>`
-                : `<button class="btn btn-secondary" onclick="buyNow('${product.id}', this)">
-                ${IC.buy} Comprar Agora
-              </button>
-              <button class="btn btn-ml-add" onclick="addToCart('${product.id}', this)">
-                ${IC.cart} Adicionar ao Carrinho
-              </button>`}
+            <div class="shop-price-block">
+              <div class="shop-price-current">${priceText}</div>
+              ${oldPriceText ? `<div class="shop-price-old">${oldPriceText}</div>` : ''}
+              ${promoPercent > 0 ? `<div class="shop-promo-tag">${promoPercent}% OFF</div>` : ''}
             </div>
-            <div id="urgency-widgets"></div>
-            <div id="view-counter" role="status" aria-live="polite">
-              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke-width="2"/></svg>
-              <span id="view-counter-text"></span>
+
+            <div class="shop-installments">ou 12x de ${fmt(effectivePrice / 12)} sem juros</div>
+
+            <div class="shop-option-list">
+              <div class="shop-option">
+                <span class="shop-option-label">Cor</span>
+                <strong>${colorValue}</strong>
+              </div>
+              <div class="shop-option">
+                <span class="shop-option-label">Modelo</span>
+                <strong>${sizeValue}</strong>
+              </div>
             </div>
-            <div class="trust-badges-inline"> 
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <div><strong>Compra protegida</strong>Pagamento 100% seguro</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <div><strong>SSL Ativo</strong>Dados criptografados</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <div><strong>Atendimento WhatsApp</strong>Suporte em tempo real</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10" stroke-width="2.5"/></svg>
-                <div><strong>LGPD</strong>Dados protegidos por lei</div>
-              </div>
+
+            <div class="shop-actions">
+              <button class="button primary" data-action="buy-now">Comprar agora</button>
+              <button class="button secondary" data-action="add-cart">Adicionar ao carrinho</button>
+            </div>
+
+            <div class="shop-delivery">
+              <strong>Entrega:</strong> ${product.free_shipping ? 'Frete grátis disponível' : 'Prazo calculado no checkout'}
+            </div>
+
+            <div class="shop-seller">
+              <span>Vendido por</span>
+              <strong>${product.seller || 'Loja oficial'}</strong>
             </div>
           </div>
-        </aside>
+        </div>
+
+        <div class="shop-info-block">
+          <div class="shop-section-title">Descrição</div>
+          <p>${(product.description || 'Sem descrição disponível.').replace(/\n/g, '<br>')}</p>
+        </div>
+
+        <div class="shop-info-block">
+          <div class="shop-section-title">Especificações</div>
+          <div class="spec-grid">
+            ${specEntries.length ? specEntries.map(([key, value]) => `
+              <div class="spec-row">
+                <span>${key}</span>
+                <strong>${value || '—'}</strong>
+              </div>
+            `).join('') : '<p>Informações técnicas indisponíveis.</p>'}
+          </div>
+        </div>
       </div>
-
-      <section class="section" aria-labelledby="desc-title">
-        <h2 class="section-title" id="desc-title">Descrição do produto</h2>
-        <div class="description-content">
-          <div id="desc-short">${formatDescription((product.description || '').slice(0, 600))}${(product.description||'').length > 600 ? '<p>...</p>' : ''}</div>
-          <div id="desc-full" style="display:none;">${formatDescription(product.description || '')}</div>
-        </div>
-        ${(product.description||'').length > 600 ? `<button class="desc-toggle-btn" id="desc-toggle-btn">${IC.chevDown} Ver descrição completa</button>` : ''}
-      </section>
-
-      <section class="section" aria-labelledby="specs-title">
-        <h2 class="section-title" id="specs-title">Características técnicas</h2>
-        <div style="overflow-x:auto;max-width:100%;">
-        <table class="specs-table" aria-label="Especificações do produto">
-          <tbody>
-            ${specEntries.map(([k, v], i) => `
-              <tr class="${i >= VISIBLE_ROWS ? 'hidden-row' : ''}" ${i >= VISIBLE_ROWS ? 'style="display:none;"' : ''}>
-                <th scope="row">${k}</th>
-                <td>${v || '—'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-        </div>
-        ${specEntries.length > VISIBLE_ROWS ? `
-          <button class="specs-toggle-btn" id="specs-toggle-btn">
-            ${IC.chevDown} Ver todas as ${specEntries.length} características
-          </button>` : ''}
-      </section>
-
-      <section class="section" aria-labelledby="reviews-title">
-        <h2 class="section-title" id="reviews-title">Avaliações dos clientes</h2>
-        <div class="reviews-summary">
-          <div class="reviews-big-score">
-            <div class="score-num">${(product.rating||5).toFixed(1)}</div>
-            <div class="score-stars">${starsHtml(product.rating||5, '1.1rem')}</div>
-            <div class="score-count">${(product.reviews||0).toLocaleString('pt-BR')} avaliações</div>
-          </div>
-          <div class="reviews-bars">
-            ${dist.map(d => {
-              const pct = reviewsList.length ? Math.round(d.count / reviewsList.length * 100) : 0;
-              return `<div class="bar-row">
-                <span class="bar-label">${d.star}</span>
-                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-                <span class="bar-count">${d.count}</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
-        <div id="reviews-filter-row" class="reviews-filter-row" style="display:none;" role="group" aria-label="Filtrar por estrelas"></div>
-        <div class="reviews-list" id="reviews-lazy-section">
-          ${reviewsList.length === 0
-            ? '<p class="reviews-placeholder">Nenhuma avaliação textual disponível ainda.</p>'
-            : '<p class="reviews-placeholder" style="padding:12px 0;">Carregando avaliações...</p>'}
-        </div>
-      </section>
     `;
 
     swapSkeletonForContent(html);
 
-    setupGallery(images);
-    loadMLVariations(product, storeDiscount);
-    setupSpecsToggle(specEntries.length);
-    setupDescToggle();
-    setupLazyReviews(reviewsList);
+    const thumbs = document.querySelectorAll('.shop-thumb');
+    thumbs.forEach((button) => {
+      button.addEventListener('click', () => {
+        const src = button.dataset.image;
+        const mainImg = document.getElementById('shop-main-image');
+        if (mainImg && src) mainImg.src = src;
+        thumbs.forEach((thumb) => thumb.classList.toggle('active', thumb === button));
+      });
+    });
+
+    document.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.action;
+        if (action === 'buy-now') {
+          if (window.buyNow) window.buyNow(product.id, button);
+        } else if (action === 'add-cart') {
+          if (window.addToCart) window.addToCart(product.id, button);
+        }
+      });
+    });
+
+    if (product.id) {
+      const productStats = document.querySelector('.shop-product-shell');
+      if (productStats) productStats.setAttribute('data-product-id', product.id);
+    }
   };
 
   /* ── SKELETON → CONTEÚDO REAL (crossfade) ── */
