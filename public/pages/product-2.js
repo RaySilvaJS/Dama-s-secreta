@@ -73,11 +73,14 @@
     const sizeForSeo = p.size || p.storage || p.specs?.['Tamanho'] || p.specs?.['Memória interna'] || '';
     const title = `${p.name} — DAMA'S SECRETA`;
     const desc = `${p.condition} · Tamanho ${sizeForSeo || 'unico'} · ${p.color || ''} · ${fmt(p.price)} em até 12x sem juros. ${(p.description || '').slice(0, 120)}...`;
+    const canonicalHref = `${window.location.origin}/product.html?id=${encodeURIComponent(p.id || PRODUCT_ID || '')}`;
     document.getElementById('page-title').textContent = title;
     document.getElementById('meta-desc').content = desc;
     document.getElementById('og-title').content = title;
     document.getElementById('og-desc').content = desc;
     if (imgSrc) document.getElementById('og-image').content = imgSrc;
+    const canonicalLink = document.getElementById('canonical-link');
+    if (canonicalLink) canonicalLink.href = canonicalHref;
 
     const existing = document.getElementById('json-ld');
     const schema = {
@@ -85,7 +88,7 @@
       '@type': 'Product',
       name: p.name,
       description: (p.description || '').slice(0, 500),
-      brand: { '@type': 'Brand', name: p.specs?.Marca || 'Apple' },
+      brand: { '@type': 'Brand', name: p.specs?.Marca || p.specs?.Fabricante || p.brand || "DAMA'S SECRETA" },
       sku: p.id,
       offers: {
         '@type': 'Offer',
@@ -493,7 +496,7 @@
 
     const extras = typeof getOrCreateCardExtras === 'function'
       ? getOrCreateCardExtras(product.id)
-      : { descontoHoje: 20, brinde: 'Kit surpresa', freteGratis: false, retiradaDisponivel: true, stock: Math.floor(Math.random() * 50) + 1 };
+      : { descontoHoje: 0, brinde: null, freteGratis: false, retiradaDisponivel: false, stock: Math.floor(Math.random() * 50) + 1 };
 
     const colorValue = String(
       product.color ||
@@ -511,9 +514,9 @@
       ''
     ).trim() || 'Unico';
 
-    const hasGift = Boolean(String(extras.brinde || '').trim());
-    const hasFreeShipping = Boolean(extras.freteGratis || product.free_shipping);
-    const hasPickup = Boolean(extras.retiradaGratis || extras.retiradaDisponivel);
+    const hasGift = Boolean(String(extras.brinde || '').trim()) && Number(extras.descontoHoje || 0) > 0;
+    const hasFreeShipping = Boolean(extras.freteGratis || product.free_shipping) && Number(extras.descontoHoje || 0) > 0;
+    const hasPickup = Boolean(extras.retiradaGratis || extras.retiradaDisponivel) && Number(extras.descontoHoje || 0) > 0;
 
     const isUnavailable = product.sold === true || Number(product.stock) <= 0;
     const mlPrice = product.price;
@@ -578,328 +581,111 @@
     const breadcrumbBrand = inferBrand();
 
     const html = `
-      <nav class="breadcrumb" aria-label="Navegação">
-        <a href="index.html">Home</a>
-        <span class="breadcrumb-sep">/</span>
-        <a href="index.html">${breadcrumbCategory}</a>
-        <span class="breadcrumb-sep">/</span>
-        <a href="index.html">${breadcrumbBrand}</a>
-        <span class="breadcrumb-sep">/</span>
-        <span class="breadcrumb-current">${product.name}</span>
-      </nav>
-
-      <div class="product-top-grid">
-
-        <section class="gallery-panel" aria-label="Galeria de imagens">
-          <div class="gallery-card">
-            <div class="gallery-main">
-              ${promoPercent > 0 ? `<span class="gallery-badge-promo">${promoPercent}% OFF</span>` : ''}
-              <button class="gallery-fab gallery-fab-heart" id="fav-btn" title="Favoritar"
-                onclick="toggleFav('${product.id}', this)"
-                style="color:${getFavs().includes(product.id) ? '#DC2626' : 'inherit'}">
-                ${IC.heart}
-              </button>
-              <button class="gallery-fab gallery-fab-share" title="Compartilhar"
-                onclick="if(navigator.share){navigator.share({title:'${product.name}',url:window.location.href})}else{navigator.clipboard&&navigator.clipboard.writeText(window.location.href);alert('Link copiado!')}">
-                ${IC.share}
-              </button>
-              ${images.length ? `
-                <button class="gallery-nav-btn prev" id="gallery-prev" aria-label="Imagem anterior">${IC.chevL}</button>
-                <img id="hero-img" src="${heroSrc}" alt="${product.name}" style="cursor:zoom-in;"/>
-                <button class="gallery-nav-btn next" id="gallery-next" aria-label="Próxima imagem">${IC.chevR}</button>
-              ` : `<div class="gallery-empty"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Imagem não disponível</span></div>`}
-            </div>
-            <div class="gallery-thumbs" id="gallery-thumbs"${images.length <= 1 ? ' style="display:none"' : ''}>
-              ${images.length > 1 ? images.map((src, i) => `
-                <button class="thumb-btn${i===0?' active':''}" aria-label="Miniatura ${i+1}">
-                  <img src="${src}" alt="Miniatura ${i+1}" loading="${i===0?'eager':'lazy'}"/>
-                </button>`).join('') : ''}
-            </div>
+      <div class="product-page-shell">
+        <div class="product-card-clean">
+          <div class="product-brand-row"><a href="index.html">Conferir mais produtos da marca ${breadcrumbBrand}</a></div>
+          <div class="product-micro-meta">
+            <span>Novo</span>
+            <span class="meta-sep">|</span>
+            <span>2 vendidos</span>
+            <button class="product-fav-btn" id="fav-btn" type="button" onclick="toggleFav('${product.id}', this)" aria-label="Favoritar produto">${IC.heart}</button>
           </div>
-        </section>
 
-        <aside class="sidebar-panel">
+          <h1 class="product-name-clean">${product.name}</h1>
 
-          <div class="card">
-            <div class="product-condition-row">
-              <span class="badge-condition">${product.condition || 'Novo'}</span>
-            </div>
-            <h1 class="product-name">${product.name}</h1>
-            ${(product.reviews||0) > 0 ? `<a href="#" class="review-anchor-link" onclick="event.preventDefault();document.getElementById('reviews-title')?.scrollIntoView({behavior:'smooth'})">${starsHtml(product.rating||5, '.9rem')} ${(product.reviews||0).toLocaleString('pt-BR')} avaliações · Ver todas</a>` : ''}
-            <div class="seller-row">
-              Vendido por <strong>${product.seller || "DAMA'S SECRETA"}</strong>
-              <span class="seller-verified"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Vendedor verificado</span>
+          <div class="product-rating-row">
+            <span class="stars-filled">★★★★★</span>
+            <span>(1)</span>
+          </div>
+
+          <div class="price-strong" id="price-current">${fmt(basePrice)}</div>
+          <div class="price-installment-clean" id="price-installment">12x de <strong>R$ ${installment}</strong></div>
+          <a href="#" class="payment-link" onclick="event.preventDefault();">Ver os meios de pagamento</a>
+
+          <div class="product-highlight-box">
+            <strong>Carga grátis</strong> entre 24 e 27/ago por ser sua primeira compra
+          </div>
+          <div class="delivery-detail">Mais detalhes e formas de entrega</div>
+
+          <div class="option-block">
+            <div class="option-label">Cor: <span>${colorValue}</span></div>
+            <div class="option-chips">
+              <button type="button" class="option-chip active">${colorValue}</button>
             </div>
           </div>
 
-          <div class="card">
-            <div class="daily-badge">
-              ${IC.zap} Oferta do dia: ${extras.descontoHoje}% OFF
-            </div>
-            <div class="price-original" id="price-original"${originalPrice <= basePrice ? ' style="display:none"' : ''}>De: ${fmt(originalPrice)}</div>
-            <div class="price-main-row">
-              <div class="price-current" id="price-current">${fmt(basePrice)}</div>
-              <span class="price-discount-badge" id="price-discount-badge"${promoPercent <= 0 ? ' style="display:none"' : ''}>${promoPercent}% OFF</span>
-            </div>
-            <div class="installment-row" id="price-installment">
-              ${IC.card} ou em até <strong>12x de R$ ${installment}</strong> sem juros
-            </div>
-            ${hasGift ? `<div class="gift-row">
-              ${IC.gift} Brinde: ${extras.brinde}
-            </div>` : ''}
-            ${hasFreeShipping
-              ? `<div class="shipping-badge">${IC.truck} Frete grátis — Envio rápido</div>`
-              : `<p class="shipping-calc">${IC.truck} Calcule o frete na finalização da compra</p>`}
-            ${hasPickup ? `<div class="shipping-badge" style="margin-top:8px;background:#ECFDF5;color:#065F46;border-color:#A7F3D0;">${IC.check} Retirada disponível no ponto parceiro</div>` : ''}
-          </div>
-
-          ${showMlCard ? `
-          <div class="ml-compare-card">
-
-            <div class="ml-compare-header">
-              <div class="ml-brand">
-                <img src="https://i.ibb.co/Gf6RgpcN/image.png" alt="Mercado Livre" class="ml-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                <div class="ml-logo-badge" style="display:none">ML</div>
-                <span class="ml-brand-name">Mercado Livre</span>
-              </div>
-              <span class="ml-compare-badge">Comparador de preço</span>
-            </div>
-
-            <div class="ml-price-block">
-              <div class="ml-price-row">
-                <span class="ml-price-label">Preço no Mercado Livre:</span>
-                <span class="ml-price-ml" id="ml-price-ml">${fmt(originalPrice)}</span>
-              </div>
-              <div class="ml-price-row">
-                <span class="ml-price-label">Preço aqui na loja:</span>
-                <span class="ml-price-store" id="ml-price-store">${fmt(basePrice)}</span>
-              </div>
-            </div>
-
-            <details class="ml-why">
-              <summary>Por que é mais barato aqui do que no Mercado Livre?</summary>
-              <div class="ml-why-content">
-                <p>Ao vender no Mercado Livre, os lojistas pagam <strong>comissões de 12% a 16%</strong> sobre cada venda, além de taxas de anúncio impulsionado, frete subsidiado obrigatório e custos de plataforma. Tudo isso é embutido no preço final que você vê por lá.</p>
-                <p>Aqui, vendemos <strong>diretamente para você</strong>, sem pagar comissão para nenhuma plataforma intermediária. Essa economia vai integralmente para o seu bolso — sem abrir mão da qualidade, nota fiscal ou garantia de fábrica.</p>
-                <p>É o mesmo produto, do mesmo distribuidor autorizado — só que sem o custo extra do marketplace.</p>
-              </div>
-            </details>
-
-            <button class="ml-link-btn" id="ml-link-btn" onclick="window.open('${mlUrl}', '_blank')">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              Ver anúncio original no Mercado Livre
-            </button>
-
-          </div>` : ''}
-
-          <div class="card" id="variations-card">
-            <div style="margin-bottom:14px;">
-              <div class="section-label">Cor</div>
-              <div class="variation-chips">
-                <button class="variation-chip active">${colorValue}</button>
-              </div>
-            </div>
-            <div>
-              <div class="section-label">Tamanho</div>
-              <div class="variation-chips">
-                <button class="variation-chip active">${sizeValue}</button>
-              </div>
+          <div class="option-block">
+            <div class="option-label">Tamanho: <span>Escolha</span></div>
+            <div class="option-chips">
+              <button type="button" class="option-chip active">M</button>
+              <button type="button" class="option-chip">G</button>
             </div>
           </div>
 
-          <div class="card" id="stock-display" style="padding:14px 18px;">
-            <div class="stock-row">
-              ${isUnavailable
-                ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Produto esgotado</span>`
-                : extras.stock <= 5
-                  ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Últimas ${extras.stock} unidade${extras.stock > 1 ? 's' : ''} disponível${extras.stock > 1 ? 'is' : ''}!</span>`
-                  : `<span class="stock-dot ok"></span><span style="color:var(--green);">Em estoque — ${extras.stock} disponível${extras.stock > 1 ? 'is' : ''}</span>`}
-            </div>
+          <div class="trust-note">Perfeito para 100% ✓</div>
+          <div class="delivery-window">As datas de entrega incluem os 4 dias necessários para deixar o produto pronto.</div>
+
+          <div class="quantity-row">
+            <span>Quantidade:</span>
+            <span class="quantity-select">1 unidade <span class="caret">▾</span></span>
+            <span class="stock-quiet">(+25 disponíveis)</span>
           </div>
 
-          <div class="card">
-            <div class="actions-grid">
-              ${isUnavailable
-                ? `<button class="btn btn-secondary" disabled style="opacity:.6;cursor:not-allowed;grid-column:1/-1;">Produto Esgotado</button>`
-                : `<button class="btn btn-secondary" onclick="buyNow('${product.id}', this)">
-                ${IC.buy} Comprar Agora
-              </button>
-              <button class="btn btn-ml-add" onclick="addToCart('${product.id}', this)">
-                ${IC.cart} Adicionar ao Carrinho
-              </button>`}
-            </div>
-            <div id="urgency-widgets"></div>
-            <div id="view-counter" role="status" aria-live="polite">
-              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke-width="2"/></svg>
-              <span id="view-counter-text"></span>
-            </div>
-            <div class="trust-badges-inline">
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <div><strong>Compra protegida</strong>Pagamento 100% seguro</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <div><strong>SSL Ativo</strong>Dados criptografados</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <div><strong>Atendimento WhatsApp</strong>Suporte em tempo real</div>
-              </div>
-              <div class="tbi-item">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10" stroke-width="2.5"/></svg>
-                <div><strong>LGPD</strong>Dados protegidos por lei</div>
-              </div>
-            </div>
-          </div>
+          <button class="product-cta" onclick="buyNow('${product.id}', this)">Comprar agora</button>
+          <button class="product-cta-secondary" onclick="addToCart('${product.id}', this)">${IC.cart} Adicionar ao carrinho</button>
+        </div>
 
-          <div class="card">
-            <div class="section-label" style="margin-bottom:12px;">Por que comprar aqui?</div>
-            <div class="benefits-grid">
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.lock}</div>
-                <div class="benefit-text"><strong>Compra Segura</strong><span>Pagamento protegido e confirmado</span></div>
-              </div>
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.shield}</div>
-                <div class="benefit-text"><strong>Garantia</strong><span>Garantia de fábrica incluída</span></div>
-              </div>
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.receipt}</div>
-                <div class="benefit-text"><strong>Nota Fiscal</strong><span>NF-e emitida em seu nome</span></div>
-              </div>
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.check}</div>
-                <div class="benefit-text"><strong>Original</strong><span>Distribuidor autorizado</span></div>
-              </div>
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.truck}</div>
-                <div class="benefit-text"><strong>Entrega Rápida</strong><span>Envio com rastreio em tempo real</span></div>
-              </div>
-              <div class="benefit-item">
-                <div class="benefit-icon">${IC.headset}</div>
-                <div class="benefit-text"><strong>Suporte</strong><span>Atendimento pós-venda dedicado</span></div>
-              </div>
-            </div>
+        <div class="product-box">
+          <div class="seller-topline">
+            <span>Vendido por <strong>${product.seller || "DAMA'S SECRETA"}</strong></span>
+            <span>+5 vendas</span>
           </div>
-
-          <div class="card" style="background:#FFFBEB;border-color:#FDE68A;">
-            <div class="section-label" style="margin-bottom:10px;color:#92400E;">⭐ Avaliações de clientes</div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-              <div style="background:#fff;border-radius:10px;padding:12px 14px;border:1px solid #FDE68A;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="color:#F59E0B;font-size:13px;">★★★★★</span>
-                  <strong style="font-size:13px;color:#0F172A;">Larissa Lima</strong>
-                  <span style="font-size:11px;color:#94A3B8;margin-left:auto;">São Paulo, SP</span>
-                </div>
-                <p style="font-size:13px;color:#475569;line-height:1.5;margin:0;">"Recebi o iPhone em perfeito estado, na caixa lacrada e com nota fiscal. Atendimento rápido pelo WhatsApp. Recomendo!"</p>
-              </div>
-              <div style="background:#fff;border-radius:10px;padding:12px 14px;border:1px solid #FDE68A;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="color:#F59E0B;font-size:13px;">★★★★★</span>
-                  <strong style="font-size:13px;color:#0F172A;">Jackson Bender</strong>
-                  <span style="font-size:11px;color:#94A3B8;margin-left:auto;">Paraná, PR</span>
-                </div>
-                <p style="font-size:13px;color:#475569;line-height:1.5;margin:0;">"Produto original, entrega rastreada. Paguei via PIX e recebi a confirmação rapidamente. Processo simples e seguro."</p>
-              </div>
-              <div style="background:#fff;border-radius:10px;padding:12px 14px;border:1px solid #FDE68A;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                  <span style="color:#F59E0B;font-size:13px;">★★★★★</span>
-                  <strong style="font-size:13px;color:#0F172A;">Anthony Dias</strong>
-                  <span style="font-size:11px;color:#94A3B8;margin-left:auto;">Salvador, BA</span>
-                </div>
-                <p style="font-size:13px;color:#475569;line-height:1.5;margin:0;">"Melhor preço que achei para produto original com garantia. Chegou antes do prazo. Super indico a DAMA'S SECRETA!"</p>
-              </div>
-            </div>
+          <div class="seller-card">
+            <span>Compra Garantida.</span>
+            <span class="mini-avatars">
+              <span>5</span>
+              <span>✓</span>
+              <span>✔</span>
+            </span>
           </div>
+          <p class="info-copy" style="margin-top: 12px;">Receba o produto que está esperando ou devolvemos o dinheiro.</p>
+        </div>
 
-        </aside>
+        <div class="product-box">
+          <h3>Vendido por ${product.seller || "DAMA'S SECRETA"}</h3>
+          <div class="seller-topline" style="margin-bottom:12px;">
+            <span>+5 Produtos</span>
+          </div>
+          <div class="seller-card" style="margin-top: 0;">
+            <div class="mini-avatars">
+              <span>5</span>
+              <span>✦</span>
+              <span>✓</span>
+            </div>
+            <span>Vendas</span>
+            <span>Bom atendimento</span>
+            <span>Entrega no prazo</span>
+          </div>
+          <button class="product-cta-secondary" style="margin-top: 16px;">Ver mais produtos do vendedor</button>
+        </div>
+
+        <div class="product-box">
+          <h3>Devolução grátis.</h3>
+          <p class="info-copy">Você tem 30 dias a partir do recebimento do produto para devolvê-lo, não importa o motivo.</p>
+          <a href="#" class="inline-link" onclick="event.preventDefault();">Ver mais sobre devoluções</a>
+        </div>
+
+        <div class="product-box">
+          <h3>Meios de pagamento</h3>
+          <div class="payment-grid">
+            <div class="payment-item logo">Línea de Crédito</div>
+            <div class="payment-item logo card-blue">mercado pago</div>
+            <div class="payment-item logo card-red">Cartões de crédito</div>
+            <div class="payment-item logo card-black">pix</div>
+            <div class="payment-item logo vendor">Boleto bancário</div>
+          </div>
+        </div>
       </div>
-
-      <section class="section" aria-labelledby="hl-title">
-        <h2 class="section-title" id="hl-title">O que você precisa saber</h2>
-        <div class="highlight-grid">
-          ${HL_SPECS.map(h => {
-            const val = specs[h.key] || '—';
-            return `<div class="highlight-card">
-              <div class="h-icon">${h.icon}</div>
-              <div class="h-label">${h.label}</div>
-              <div class="h-value">${val}</div>
-            </div>`;
-          }).join('')}
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="desc-title">
-        <h2 class="section-title" id="desc-title">Descrição do produto</h2>
-        <div class="description-content">
-          <div id="desc-short">${formatDescription((product.description || '').slice(0, 600))}${(product.description||'').length > 600 ? '<p>...</p>' : ''}</div>
-          <div id="desc-full" style="display:none;">${formatDescription(product.description || '')}</div>
-        </div>
-        ${(product.description||'').length > 600 ? `<button class="desc-toggle-btn" id="desc-toggle-btn">${IC.chevDown} Ver descrição completa</button>` : ''}
-      </section>
-
-      <section class="section" aria-labelledby="specs-title">
-        <h2 class="section-title" id="specs-title">Características técnicas</h2>
-        <div style="overflow-x:auto;max-width:100%;">
-        <table class="specs-table" aria-label="Especificações do produto">
-          <tbody>
-            ${specEntries.map(([k, v], i) => `
-              <tr class="${i >= VISIBLE_ROWS ? 'hidden-row' : ''}" ${i >= VISIBLE_ROWS ? 'style="display:none;"' : ''}>
-                <th scope="row">${k}</th>
-                <td>${v || '—'}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-        </div>
-        ${specEntries.length > VISIBLE_ROWS ? `
-          <button class="specs-toggle-btn" id="specs-toggle-btn">
-            ${IC.chevDown} Ver todas as ${specEntries.length} características
-          </button>` : ''}
-      </section>
-
-      <section class="section" aria-labelledby="reviews-title">
-        <h2 class="section-title" id="reviews-title">Avaliações dos clientes</h2>
-        <div class="reviews-summary">
-          <div class="reviews-big-score">
-            <div class="score-num">${(product.rating||5).toFixed(1)}</div>
-            <div class="score-stars">${starsHtml(product.rating||5, '1.1rem')}</div>
-            <div class="score-count">${(product.reviews||0).toLocaleString('pt-BR')} avaliações</div>
-          </div>
-          <div class="reviews-bars">
-            ${dist.map(d => {
-              const pct = reviewsList.length ? Math.round(d.count / reviewsList.length * 100) : 0;
-              return `<div class="bar-row">
-                <span class="bar-label">${d.star}</span>
-                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-                <span class="bar-count">${d.count}</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
-        <div id="reviews-filter-row" class="reviews-filter-row" style="display:none;" role="group" aria-label="Filtrar por estrelas"></div>
-        <div class="reviews-list" id="reviews-lazy-section">
-          ${reviewsList.length === 0
-            ? '<p class="reviews-placeholder">Nenhuma avaliação textual disponível ainda.</p>'
-            : '<p class="reviews-placeholder" style="padding:12px 0;">Carregando avaliações...</p>'}
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="qa-title">
-        <h2 class="section-title" id="qa-title">Perguntas e respostas</h2>
-        <div class="qa-input-row">
-          <input class="qa-input" type="text" id="qa-input" placeholder="Escreva sua pergunta sobre o produto..." maxlength="300" aria-label="Digite sua pergunta"/>
-          <button class="qa-submit" onclick="handleQA()">Perguntar</button>
-        </div>
-        <p class="qa-placeholder">Nenhuma pergunta ainda. Seja o primeiro a perguntar!</p>
-      </section>
-
-      <section class="section" aria-labelledby="related-title">
-        <h2 class="section-title" id="related-title">Você também pode gostar</h2>
-        <div class="related-grid" id="related-container">
-          <p style="color:var(--muted);font-size:.875rem;grid-column:1/-1;">Carregando produtos relacionados...</p>
-        </div>
-      </section>
     `;
 
     swapSkeletonForContent(html);
@@ -1015,17 +801,11 @@
         : Math.round((1 - mlPrice / (p.priceOriginal || mlPrice)) * 100);
       const install   = (basePrice / 12).toFixed(2).replace('.', ',');
 
-      const elOrig   = document.getElementById('price-original');
       const elCurr   = document.getElementById('price-current');
-      const elBadge  = document.getElementById('price-discount-badge');
       const elInst   = document.getElementById('price-installment');
-      const galBadge = document.querySelector('.gallery-badge-promo');
 
-      if (elOrig)   { elOrig.textContent   = `De: ${fmt(origPrice)}`; elOrig.style.display   = origPrice > basePrice ? '' : 'none'; }
       if (elCurr)   elCurr.textContent     = fmt(basePrice);
-      if (elBadge)  { elBadge.textContent  = `${promo}% OFF`;         elBadge.style.display  = promo > 0 ? '' : 'none'; }
       if (elInst)   elInst.innerHTML       = `${IC.card} ou em até <strong>12x de R$ ${install}</strong> sem juros`;
-      if (galBadge) { galBadge.textContent = `${promo}% OFF`;         galBadge.style.display = promo > 0 ? '' : 'none'; }
 
       const qty     = p.stock ?? 0;
       const elStock = document.getElementById('stock-display');
