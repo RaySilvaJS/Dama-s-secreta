@@ -1,4 +1,4 @@
-// ===== META PIXEL — jessi.iphones =====
+// ===== META PIXEL — DAMA'S SECRETA =====
 // Substitua SEU_PIXEL_ID pelo ID do seu Pixel da Meta
 // Exemplo: '1234567890123456'
 

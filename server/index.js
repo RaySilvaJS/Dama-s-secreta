@@ -1814,7 +1814,7 @@ app.post('/api/auth/otp/send', authRateLimit(5, 5 * 60 * 1000), async (req, res)
     if (sock) {
       const jid = digits.startsWith('55') ? digits : '55' + digits;
       await sock.sendMessage(`${jid}@s.whatsapp.net`, {
-        text: `*jessi.iphones*\n\nSeu código de acesso é: *${code}*\n\nVálido por 10 minutos. Não compartilhe com ninguém.`
+        text: `*DAMA'S SECRETA*\n\nSeu código de acesso é: *${code}*\n\nVálido por 10 minutos. Não compartilhe com ninguém.`
       });
     }
   } catch (e) {

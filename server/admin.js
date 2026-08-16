@@ -835,7 +835,7 @@ router.post('/alerts/test', adminAuth, async (req, res) => {
     return res.status(400).json({ error: 'Telegram não configurado ou desativado.' });
   }
   const ok = await alerts.sendTelegram(cfg.telegram.botToken, cfg.telegram.chatId,
-    '✅ <b>Teste de alerta</b>\n\nO sistema de alertas está funcionando corretamente!\n\n<i>JessiPhones DevOps</i>');
+    "✅ <b>Teste de alerta</b>\n\nO sistema de alertas está funcionando corretamente!\n\n<i>DAMA'S SECRETA DevOps</i>");
   res.json({ ok, message: ok ? 'Mensagem enviada com sucesso!' : 'Falha ao enviar. Verifique o token e chat ID.' });
 });
 
@@ -861,7 +861,7 @@ router.post('/pix-config', adminAuth, (req, res) => {
   cfg.pixConfig = {
     pixKey:       (pixKey       || '').trim(),
     pixKeyType:   (pixKeyType   || 'chave_aleatoria').trim(),
-    receiverName: (receiverName || 'Jessi iPhones').trim(),
+    receiverName: (receiverName || "DAMA'S SECRETA").trim(),
     receiverCity: (receiverCity || 'Rio de Janeiro').trim()
   };
   saveConfig(cfg);

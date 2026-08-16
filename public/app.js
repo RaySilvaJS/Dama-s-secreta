@@ -630,6 +630,7 @@ async function addToCart(productId, btn) {
       product.descontoHoje = extras.descontoHoje;
       product.brinde = extras.brinde;
       product.freteGratis = extras.freteGratis;
+      product.retiradaDisponivel = extras.retiradaDisponivel === true;
       window.cart.addItem(product, 1);
     }
   } finally {
@@ -650,6 +651,7 @@ async function buyNow(productId, btn) {
       product.descontoHoje = extras.descontoHoje;
       product.brinde       = extras.brinde;
       product.freteGratis  = extras.freteGratis;
+      product.retiradaDisponivel = extras.retiradaDisponivel === true;
       window.cart.addItem(product, 1);
       _showTypingMessage('Produto adicionado! Indo para o carrinho...', () => {
         window.location.href = '/cart.html';

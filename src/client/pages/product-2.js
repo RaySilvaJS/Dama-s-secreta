@@ -70,8 +70,9 @@
   window.closeLightbox = () => document.getElementById('lightbox').classList.remove('open');
 
   const updateSEO = (p, imgSrc) => {
-    const title = `${p.name} — jessi.iphones`;
-    const desc = `${p.condition} · ${p.storage || ''} · ${p.color || ''} · ${fmt(p.price)} em até 12x sem juros. ${(p.description || '').slice(0, 120)}...`;
+    const sizeForSeo = p.size || p.storage || p.specs?.['Tamanho'] || p.specs?.['Memória interna'] || '';
+    const title = `${p.name} — DAMA'S SECRETA`;
+    const desc = `${p.condition} · Tamanho ${sizeForSeo || 'unico'} · ${p.color || ''} · ${fmt(p.price)} em até 12x sem juros. ${(p.description || '').slice(0, 120)}...`;
     document.getElementById('page-title').textContent = title;
     document.getElementById('meta-desc').content = desc;
     document.getElementById('og-title').content = title;
@@ -91,7 +92,7 @@
         priceCurrency: 'BRL',
         price: p.price,
         availability: p.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        seller: { '@type': 'Organization', name: p.seller || 'jessi.iphones' }
+        seller: { '@type': 'Organization', name: p.seller || "DAMA'S SECRETA" }
       },
       aggregateRating: p.rating ? {
         '@type': 'AggregateRating',
@@ -119,6 +120,7 @@
         product.descontoHoje = ex.descontoHoje;
         product.brinde = ex.brinde;
         product.freteGratis = ex.freteGratis;
+        product.retiradaDisponivel = ex.retiradaDisponivel === true;
       }
       if (window.cart) window.cart.addItem(product, 1);
     } catch {}
@@ -289,7 +291,27 @@
 
     const extras = typeof getOrCreateCardExtras === 'function'
       ? getOrCreateCardExtras(product.id)
-      : { descontoHoje: 20, brinde: 'Apple Watch', freteGratis: false, stock: Math.floor(Math.random() * 50) + 1 };
+      : { descontoHoje: 20, brinde: 'Kit surpresa', freteGratis: false, retiradaDisponivel: true, stock: Math.floor(Math.random() * 50) + 1 };
+
+    const colorValue = String(
+      product.color ||
+      specs['Cor'] ||
+      specs['Cor principal'] ||
+      specs['Cor do produto'] ||
+      ''
+    ).trim() || 'Unica';
+
+    const sizeValue = String(
+      product.size ||
+      product.storage ||
+      specs['Tamanho'] ||
+      specs['Memória interna'] ||
+      ''
+    ).trim() || 'Unico';
+
+    const hasGift = Boolean(String(extras.brinde || '').trim());
+    const hasFreeShipping = Boolean(extras.freteGratis || product.free_shipping);
+    const hasPickup = Boolean(extras.retiradaGratis || extras.retiradaDisponivel);
 
     const mlPrice = product.price;
     const basePrice = storeDiscount > 0
@@ -329,13 +351,36 @@
     const specEntries = Object.entries(specs);
     const VISIBLE_ROWS = 8;
 
+    const rawName = String(product.name || '');
+    const rawNameLower = rawName.toLowerCase();
+    const brandFromSpecs = String(specs?.Marca || specs?.Fabricante || '').trim();
+    const inferBrand = () => {
+      if (brandFromSpecs) return brandFromSpecs;
+      if (/\bapple\b|\biphone\b|\bipad\b|\bmacbook\b/i.test(rawNameLower)) return 'Apple';
+      if (/\bsamsung\b|\bgalaxy\b/i.test(rawNameLower)) return 'Samsung';
+      if (/\bxiaomi\b|\bredmi\b|\bpoco\b/i.test(rawNameLower)) return 'Xiaomi';
+      if (/\bmotorola\b|\bmoto\b/i.test(rawNameLower)) return 'Motorola';
+      return 'Marcas';
+    };
+
+    const inferCategory = () => {
+      if (/\biphone\b|\bsmartphone\b|\bcelular\b|\bgalaxy\b|\bredmi\b|\bmoto\b/i.test(rawNameLower)) return 'Celulares';
+      if (/\bwatch\b|\bsmartwatch\b|\brel[oó]gio\b/i.test(rawNameLower)) return 'Smartwatches';
+      if (/\bmacbook\b|\bnotebook\b|\blaptop\b|\bpc\b/i.test(rawNameLower)) return 'Informática';
+      if (/\bairpods\b|\bfone\b|\bcabo\b|\bcarregador\b|\bcapa\b|\bcase\b|\bacess[oó]rio\b/i.test(rawNameLower)) return 'Acessórios';
+      return 'Produtos';
+    };
+
+    const breadcrumbCategory = inferCategory();
+    const breadcrumbBrand = inferBrand();
+
     const html = `
       <nav class="breadcrumb" aria-label="Navegação">
         <a href="index.html">Home</a>
         <span class="breadcrumb-sep">/</span>
-        <a href="index.html">Smartphones</a>
+        <a href="index.html">${breadcrumbCategory}</a>
         <span class="breadcrumb-sep">/</span>
-        <a href="index.html">Apple</a>
+        <a href="index.html">${breadcrumbBrand}</a>
         <span class="breadcrumb-sep">/</span>
         <span class="breadcrumb-current">${product.name}</span>
       </nav>
@@ -384,13 +429,13 @@
               <span class="rating-count">(${(product.reviews||0).toLocaleString('pt-BR')} avaliações)</span>
             </div>
             <div class="seller-row">
-              Vendido por <strong>${product.seller || 'jessi.iphones'}</strong>
+              Vendido por <strong>${product.seller || "DAMA'S SECRETA"}</strong>
             </div>
           </div>
 
           <div class="card">
             <div class="daily-badge">
-              ${IC.zap} Desconto do dia: ${extras.descontoHoje}% OFF
+              ${IC.zap} Oferta do dia: ${extras.descontoHoje}% OFF
             </div>
             <div class="price-original" id="price-original"${originalPrice <= basePrice ? ' style="display:none"' : ''}>De: ${fmt(originalPrice)}</div>
             <div class="price-main-row">
@@ -400,12 +445,13 @@
             <div class="installment-row" id="price-installment">
               ${IC.card} ou em até <strong>12x de R$ ${installment}</strong> sem juros
             </div>
-            <div class="gift-row">
+            ${hasGift ? `<div class="gift-row">
               ${IC.gift} Brinde: ${extras.brinde}
-            </div>
-            ${extras.freteGratis || product.free_shipping
+            </div>` : ''}
+            ${hasFreeShipping
               ? `<div class="shipping-badge">${IC.truck} Frete grátis — Envio rápido</div>`
               : `<p class="shipping-calc">${IC.truck} Calcule o frete na finalização da compra</p>`}
+            ${hasPickup ? `<div class="shipping-badge" style="margin-top:8px;background:#ECFDF5;color:#065F46;border-color:#A7F3D0;">${IC.check} Retirada disponível no ponto parceiro</div>` : ''}
           </div>
 
           ${showMlCard ? `
@@ -451,13 +497,13 @@
             <div style="margin-bottom:14px;">
               <div class="section-label">Cor</div>
               <div class="variation-chips">
-                <button class="variation-chip active">${product.color || 'Padrão'}</button>
+                <button class="variation-chip active">${colorValue}</button>
               </div>
             </div>
             <div>
-              <div class="section-label">Armazenamento</div>
+              <div class="section-label">Tamanho</div>
               <div class="variation-chips">
-                <button class="variation-chip active">${product.storage || 'Padrão'}</button>
+                <button class="variation-chip active">${sizeValue}</button>
               </div>
             </div>
           </div>
@@ -644,43 +690,59 @@
     if (!card) return;
 
     const isValidImg = (s) => typeof s === 'string' && s.startsWith('http');
+    const resolveColor = (p) => String(
+      p?.color ||
+      p?.specs?.['Cor'] ||
+      p?.specs?.['Cor principal'] ||
+      p?.specs?.['Cor do produto'] ||
+      ''
+    ).trim();
+    const resolveSize = (p) => String(
+      p?.size ||
+      p?.storage ||
+      p?.specs?.['Tamanho'] ||
+      p?.specs?.['Memória interna'] ||
+      ''
+    ).trim();
 
     const siblings = _catalog.filter(p => p.model && p.model === product.model);
 
     if (siblings.length <= 1) {
+      const colorLabel = resolveColor(product) || 'Unica';
+      const sizeLabel = resolveSize(product) || 'Unico';
       card.innerHTML = `
         <div style="margin-bottom:14px;">
           <div class="section-label">Cor</div>
           <div class="variation-chips">
-            <button class="variation-chip active">${product.color || 'Padrão'}</button>
+            <button class="variation-chip active">${colorLabel}</button>
           </div>
         </div>
         <div>
-          <div class="section-label">Armazenamento</div>
+          <div class="section-label">Tamanho</div>
           <div class="variation-chips">
-            <button class="variation-chip active">${product.storage || 'Padrão'}</button>
+            <button class="variation-chip active">${sizeLabel}</button>
           </div>
         </div>`;
       return;
     }
 
-    const colors   = [...new Set(siblings.map(p => p.color).filter(Boolean))];
-    const storages = [...new Set(siblings.map(p => p.storage).filter(Boolean))];
+    const colors   = [...new Set(siblings.map(resolveColor).filter(Boolean))];
+    const storages = [...new Set(siblings.map(resolveSize).filter(Boolean))];
 
-    const sel = { color: product.color || colors[0], storage: product.storage || storages[0] };
+    const sel = { color: resolveColor(product) || colors[0], storage: resolveSize(product) || storages[0] };
 
-    const colorOk   = (c) => siblings.some(p => p.color   === c && (p.stock ?? 0) > 0);
-    const storageOk = (s) => siblings.some(p => p.storage === s && (p.stock ?? 0) > 0);
+    const colorOk   = (c) => siblings.some(p => resolveColor(p) === c && (p.stock ?? 0) > 0);
+    const storageOk = (s) => siblings.some(p => resolveSize(p)  === s && (p.stock ?? 0) > 0);
 
     const findBestSibling = (type, val) => {
       if (type === 'color') {
-        return siblings.find(p => p.color === val && p.storage === sel.storage)
-            || siblings.find(p => p.color === val && (p.stock ?? 0) > 0)
-            || siblings.find(p => p.color === val);
+        return siblings.find(p => resolveColor(p) === val && resolveSize(p) === sel.storage)
+            || siblings.find(p => resolveColor(p) === val && (p.stock ?? 0) > 0)
+            || siblings.find(p => resolveColor(p) === val);
       }
-      return siblings.find(p => p.storage === val && p.color === sel.color)
-          || siblings.find(p => p.storage === val && (p.stock ?? 0) > 0)
-          || siblings.find(p => p.storage === val);
+      return siblings.find(p => resolveSize(p) === val && resolveColor(p) === sel.color)
+          || siblings.find(p => resolveSize(p) === val && (p.stock ?? 0) > 0)
+          || siblings.find(p => resolveSize(p) === val);
     };
 
     const applyVariant = (p) => {
@@ -750,7 +812,7 @@
         const cards = colors.map(c => {
           const active  = c === sel.color;
           const avail   = colorOk(c);
-          const sib     = siblings.find(p => p.color === c) || null;
+          const sib     = siblings.find(p => resolveColor(p) === c) || null;
           const img     = sib ? (Array.isArray(sib.images) ? sib.images : []).find(isValidImg) || '' : '';
           const price   = sib ? fmt(sib.price) : '';
           const status  = active ? 'Disponível'
@@ -783,20 +845,22 @@
             ${!avail ? 'disabled title="Sem estoque"' : ''}>${s}</button>`;
         }).join('');
         html += `<div>
-          <div class="section-label">Armazenamento<span style="font-weight:500;text-transform:none;color:var(--text);margin-left:6px;letter-spacing:0">${sel.storage || ''}</span></div>
+          <div class="section-label">Tamanho<span style="font-weight:500;text-transform:none;color:var(--text);margin-left:6px;letter-spacing:0">${sel.storage || ''}</span></div>
           <div class="variation-chips">${chips}</div>
         </div>`;
       }
 
       if (!html) {
+        const colorLabel = sel.color || resolveColor(product) || 'Unica';
+        const sizeLabel = sel.storage || resolveSize(product) || 'Unico';
         html = `
           <div style="margin-bottom:14px;">
             <div class="section-label">Cor</div>
-            <div class="variation-chips"><button class="variation-chip active">${sel.color || 'Padrão'}</button></div>
+            <div class="variation-chips"><button class="variation-chip active">${colorLabel}</button></div>
           </div>
           <div>
-            <div class="section-label">Armazenamento</div>
-            <div class="variation-chips"><button class="variation-chip active">${sel.storage || 'Padrão'}</button></div>
+            <div class="section-label">Tamanho</div>
+            <div class="variation-chips"><button class="variation-chip active">${sizeLabel}</button></div>
           </div>`;
       }
 
@@ -808,8 +872,8 @@
           const val  = btn.dataset.val;
           const match = findBestSibling(type, val);
           if (match) {
-            sel.color   = match.color   || sel.color;
-            sel.storage = match.storage || sel.storage;
+            sel.color   = resolveColor(match) || sel.color;
+            sel.storage = resolveSize(match) || sel.storage;
             applyVariant(match);
           }
           renderChips();

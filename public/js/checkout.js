@@ -74,7 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${esc(item.nome)}</div>
           ${item.descontoHoje ? `<div style="font-size:11px;color:#16A34A;font-weight:700">${item.descontoHoje}% OFF hoje</div>` : ''}
+          ${item.brinde ? `<div style="font-size:11px;color:#16A34A;font-weight:700">Brinde: ${esc(item.brinde)}</div>` : ''}
           ${item.freteGratis && isPrimeiraCompra ? `<div style="font-size:11px;color:#16A34A;font-weight:700">Frete grátis (1ª compra)</div>` : ''}
+          ${item.retiradaDisponivel ? `<div style="font-size:11px;color:#065F46;font-weight:700">Retirada disponível</div>` : ''}
           <div style="font-size:12px;color:#6B7280;margin-top:3px">Qtd: ${item.quantidade}</div>
         </div>
         <div style="font-size:15px;font-weight:800;color:#111827;flex-shrink:0">${fmt(item.preco * item.quantidade)}</div>
@@ -722,9 +724,11 @@ document.addEventListener('DOMContentLoaded', () => {
         nome: item.nome, preco: item.preco,
         precoOriginal: item.precoOriginal || null,
         descontoHoje: item.descontoHoje || 0,
+        brinde: item.brinde || null,
         quantidade: item.quantidade,
         subtotal: item.preco * item.quantidade,
         freteGratis: item.freteGratis || false,
+        retiradaDisponivel: item.retiradaDisponivel === true,
       })),
       quantidade: orderItems.reduce((s, i) => s + i.quantidade, 0),
       subtotal,
@@ -737,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
       couponFreeShipping,
       total_final: Math.max(0, subtotal + insuranceAmt + efectiveFrete - couponDiscount),
       hasFreteGratis: hasFreteGratis || couponFreeShipping,
+      hasRetiradaDisponivel: orderItems.some(item => item.retiradaDisponivel === true),
       source,
       paymentMethod: payMethod,
     };

@@ -148,7 +148,7 @@
             <label>${lbl('PREÇO ORIGINAL (R$)')}<input id="ae-f-priceOrig" type="number" step="0.01" style="${f()}" placeholder="0.00"></label>
             <label>${lbl('MODELO')}<input id="ae-f-model" style="${f()}" placeholder="iPhone 15 Pro Max"></label>
             <label>${lbl('COR')}<input id="ae-f-color" style="${f()}" placeholder="Preto Titânio"></label>
-            <label>${lbl('ARMAZENAMENTO')}<input id="ae-f-storage" style="${f()}" placeholder="256GB"></label>
+            <label>${lbl('TAMANHO')}<input id="ae-f-storage" style="${f()}" placeholder="P / M / G / GG"></label>
             <label>${lbl('ESTOQUE')}
               <div style="display:flex;gap:4px;">
                 <input id="ae-f-stock" type="number" style="${f()}" placeholder="1">
@@ -606,7 +606,7 @@
             <label>${lbl('PREÇO (R$) *')}<input id="ae-m-price" type="number" step="0.01" style="${f()}" placeholder="0.00"></label>
             <label>${lbl('MODELO')}<input id="ae-m-model" style="${f()}" placeholder="iPhone 16 Pro"></label>
             <label>${lbl('COR')}<input id="ae-m-color" style="${f()}" placeholder="Preto Titânio"></label>
-            <label>${lbl('ARMAZENAMENTO')}<input id="ae-m-storage" style="${f()}" placeholder="256GB"></label>
+            <label>${lbl('TAMANHO')}<input id="ae-m-storage" style="${f()}" placeholder="P / M / G / GG"></label>
             <label>${lbl('ESTOQUE')}<input id="ae-m-stock" type="number" style="${f()}" placeholder="1"></label>
             <label>${lbl('CONDIÇÃO')}<select id="ae-m-condition" style="${f()}"><option>Novo</option><option>Seminovo</option><option>Usado</option></select></label>
             <label style="grid-column:1/-1;">${lbl('URL DA IMAGEM PRINCIPAL')}<input id="ae-m-img" style="${f()}" placeholder="https://..."></label>

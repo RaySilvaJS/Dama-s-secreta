@@ -116,7 +116,7 @@ router.post('/generate', async (req, res) => {
     try {
       pixCode = generatePix({
         key:  pixCfg.pixKey,
-        name: (pixCfg.receiverName || 'Jessi iPhones').substring(0, 25),
+        name: (pixCfg.receiverName || "DAMA'S SECRETA").substring(0, 25),
         city: (pixCfg.receiverCity || 'Rio de Janeiro').substring(0, 15),
         amount,
         txid: shortId,

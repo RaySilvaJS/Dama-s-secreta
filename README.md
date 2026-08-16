@@ -323,7 +323,7 @@ docker run -p 4000:4000 iphone-vendas
 
 ## 📞 Suporte
 
-- Email: jessi.iphones@example.com
+- Email: suporte@dama-secreta.com
 - WhatsApp: Clique no widget do site
 - Issues: GitHub
 
@@ -340,4 +340,4 @@ MIT License - veja LICENSE para detalhes
 
 ---
 
-**Desenvolvido com ❤️ para jessi.iphones_**
+**Desenvolvido com ❤️ para DAMA'S SECRETA**
