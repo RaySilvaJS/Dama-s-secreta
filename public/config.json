@@ -1,5 +1,3 @@
 {
-  "_info": "Desconto aplicado sobre o preco do Mercado Livre (priceOriginal). O preco final da loja sera sempre mais barato que o ML. Ex: 25 = 25% de desconto.",
-  "_opcoes": "Valores sugeridos: 10, 15, 20, 25, 30, 40, 50",
-  "descontoPadrao": 25
+  "_info": "Sistema de desconto removido — o preco exibido e sempre o product.price do catalogo, sem nenhum ajuste."
 }

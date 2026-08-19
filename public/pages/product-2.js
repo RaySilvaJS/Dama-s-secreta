@@ -492,7 +492,7 @@
     } catch { if (container.closest('.section')) container.closest('.section').remove(); }
   };
 
-  const renderProduct = (product, storeDiscount = 0) => {
+  const renderProduct = (product) => {
     const isValidImg = (s) => typeof s === 'string' && s.length > 4 && (s.startsWith('http') || s.startsWith('/uploads/'));
 
     const images = (Array.isArray(product.images) ? product.images : []).filter(isValidImg);
@@ -527,17 +527,11 @@
     const hasPickup = Boolean(extras.retiradaGratis || extras.retiradaDisponivel) && Number(extras.descontoHoje || 0) > 0;
 
     const isUnavailable = product.sold === true || Number(product.stock) <= 0;
-    const mlPrice = product.price;
-    const basePrice = storeDiscount > 0
-      ? Math.round(mlPrice * (1 - storeDiscount / 100) * 100) / 100
-      : mlPrice;
-    const originalPrice = storeDiscount > 0 ? mlPrice : (product.priceOriginal || mlPrice);
-    const promoPercent = storeDiscount > 0 ? storeDiscount : (product.promoPercent || Math.round((1 - mlPrice / (product.priceOriginal || mlPrice)) * 100));
+    const basePrice = product.price;
     const installment = (basePrice / 12).toFixed(2).replace('.', ',');
 
     const mlUrl = product.url ||
       (String(product.id || '').startsWith('MLB') ? 'https://www.mercadolivre.com.br/p/' + product.id : '');
-    const showMlCard = storeDiscount > 0;
 
     updateSEO(product, heroSrc);
 
@@ -622,7 +616,6 @@
           </div>
 
           <div class="card">
-            <div class="price-original" id="price-original">De: ${fmt(originalPrice)}</div>
             <div class="price-main-row">
               <div class="price-current" id="price-current">${fmt(basePrice)}</div>
             </div>
@@ -738,7 +731,7 @@
     swapSkeletonForContent(html);
 
     setupGallery(images);
-    loadMLVariations(product, storeDiscount);
+    loadMLVariations(product);
     setupSpecsToggle(specEntries.length);
     setupDescToggle();
     setupLazyReviews(reviewsList);
@@ -766,7 +759,7 @@
     }, 220);
   };
 
-  const loadMLVariations = (product, storeDiscount) => {
+  const loadMLVariations = (product) => {
     const card = document.getElementById('variations-card');
     if (!card) return;
 
@@ -858,21 +851,13 @@
       const imgs = (Array.isArray(p.images) ? p.images : []).filter(isValidImg);
       if (window._galleryUpdate) window._galleryUpdate(imgs.length ? imgs : (product.images || []).filter(isValidImg));
 
-      const mlPrice   = p.price;
-      const basePrice = storeDiscount > 0
-        ? Math.round(mlPrice * (1 - storeDiscount / 100) * 100) / 100
-        : mlPrice;
-      const origPrice = storeDiscount > 0 ? mlPrice : (p.priceOriginal || mlPrice);
-      const promo     = storeDiscount > 0 ? storeDiscount
-        : Math.round((1 - mlPrice / (p.priceOriginal || mlPrice)) * 100);
+      const basePrice = p.price;
       const install   = (basePrice / 12).toFixed(2).replace('.', ',');
 
       const elCurr   = document.getElementById('price-current');
-      const elOrig   = document.getElementById('price-original');
       const elInst   = document.getElementById('price-installment');
 
       if (elCurr)   elCurr.textContent     = fmt(basePrice);
-      if (elOrig)   elOrig.textContent     = `De: ${fmt(origPrice)}`;
       if (elInst)   elInst.innerHTML       = `${IC.card} ou em até <strong>12x de R$ ${install}</strong> sem juros`;
 
       const qty     = p.stock ?? 0;
@@ -892,13 +877,6 @@
       document.querySelectorAll('[onclick*="addToCart("]').forEach(b =>
         b.setAttribute('onclick', `addToCart('${p.id}', this)`));
 
-      const newMlUrl = p.url || (String(p.id).startsWith('MLB') ? 'https://www.mercadolivre.com.br/p/' + p.id : '');
-      const elMlML    = document.getElementById('ml-price-ml');
-      const elMlStore = document.getElementById('ml-price-store');
-      const elMlBtn   = document.getElementById('ml-link-btn');
-      if (elMlML)    elMlML.textContent    = fmt(origPrice);
-      if (elMlStore) elMlStore.textContent = fmt(basePrice);
-      if (elMlBtn && newMlUrl) elMlBtn.setAttribute('onclick', `window.open('${newMlUrl}', '_blank')`);
     };
 
     const renderChips = () => {
@@ -1090,36 +1068,25 @@
       return;
     }
     try {
-      const [catalogRes, configRes] = await Promise.all([
-        fetch(`/api/catalog/product/${PRODUCT_ID}`),
-        fetch('/config.json').catch(() => null)
-      ]);
+      const catalogRes = await fetch(`/api/catalog/product/${PRODUCT_ID}`);
       if (!catalogRes.ok) throw new Error('Produto não encontrado');
       const { product, siblings, related } = await catalogRes.json();
-      const config = (configRes?.ok) ? await configRes.json() : {};
-      const storeDiscount = Math.max(0, Math.min(99, Number(config.descontoPadrao) || 0));
 
       _catalog = siblings && siblings.length ? siblings : [product];
 
-      const _finalPrice = storeDiscount > 0
-        ? Math.round(product.price * (1 - storeDiscount / 100) * 100) / 100
-        : (product.price || product.preco || 0);
       window._buyNowProduct = {
         id: product.id,
         nome: product.name || product.nome || 'Produto',
-        preco: _finalPrice,
+        preco: product.price || product.preco || 0,
         imagem: Array.isArray(product.images) ? product.images[0] : (product.image || product.imagem || '')
       };
 
-      renderProduct(product, storeDiscount);
+      renderProduct(product);
       loadRelatedFromData(related || []);
       fetchProductStats(product.id);
 
       if (window.MetaPixel) {
-        var finalPrice = storeDiscount > 0
-          ? Math.round(product.price * (1 - storeDiscount / 100) * 100) / 100
-          : product.price;
-        window.MetaPixel.viewContent({ id: product.id, name: product.name, value: finalPrice });
+        window.MetaPixel.viewContent({ id: product.id, name: product.name, value: product.price });
       }
     } catch (e) {
       root.innerHTML = `<div class="empty-state"><p style="font-size:1.1rem;font-weight:600;color:var(--red);">Erro ao carregar o produto.</p><button class="btn btn-primary" style="display:inline-flex;margin-top:16px;width:auto;" onclick="location.reload()">Tentar novamente</button></div>`;

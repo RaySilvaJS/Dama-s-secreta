@@ -187,8 +187,6 @@ const updateLoadMoreBtn = (total, loaded) => {
 
 function getBadges(product) {
   if (product.isNew) return '<div class="badge purple">Novo</div>';
-  if (product.isPromo)
-    return `<div class="badge green">-${product.promoPercent}%</div>`;
   return '<div class="badge green">Destaque</div>';
 }
 
@@ -347,10 +345,8 @@ const _buildProductCardHTML = (product) => {
   const seller = (product.seller || '').replace(/Ir para Loja Oficial/gi, '').trim() || "DAMA'S SECRETA";
   const isFav = _getFavs().includes(String(product.id));
   const extras = getOrCreateCardExtras(product.id);
-  const { brinde, descontoHoje, freteGratis, stock } = extras;
+  const { stock } = extras;
   const precoFinal = product.price;
-  // Preço original (de-para) sempre exibido, independente da categoria
-  const precoOriginal = Number(product.priceOriginal) > precoFinal ? product.priceOriginal : precoFinal;
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
   const mlUrl = product.url ||
     (String(product.id || '').startsWith('MLB') ? 'https://www.mercadolivre.com.br/p/' + product.id : '');
@@ -387,16 +383,11 @@ const _buildProductCardHTML = (product) => {
 
       <p class="olx-adcard__sku">Código/SKU: ${product.id}</p>
 
-      ${Number(descontoHoje) > 0 ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
-
       <div class="olx-adcard__seller-info">
         <span class="seller-name">${seller}</span>
         ${product.rating ? `<span class="rating">${ICONS.star} ${product.rating}</span>` : ""}
       </div>
 
-      <div class="preco-original-wrap">
-        <span class="olx-adcard__old-price">${formatCurrency(precoOriginal)}</span>
-      </div>
       <h3 class="olx-adcard__price">${formatCurrency(precoFinal)}</h3>
       <div class="olx-adcard__price-info">${getInstallmentInfo(precoFinal)}</div>
 
