@@ -3773,13 +3773,16 @@ async function loadCatalogs() {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <label class="btn btn-blue" style="cursor:pointer;font-size:12px;position:relative">
-          ⬆ Atualizar Arquivo
+          🔄 Substituir Todos os Produtos
           <input type="file" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"
             onchange="uploadCatalog('${c.key}', this)">
         </label>
         <button class="btn btn-ghost" style="font-size:12px" onclick="openCatalogBackups('${c.key}')">
           🕐 Backups (${c.backupCount || 0})
         </button>
+      </div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:6px">
+        Envie um .json com a lista completa — o arquivo atual é <b>totalmente substituído</b> (produtos existentes, novos e valores atualizados), não é mesclado. Um backup do estado anterior é salvo automaticamente.
       </div>
       ${c.error ? `<div style="color:var(--red);font-size:11px;margin-top:8px">Erro: ${esc(c.error)}</div>` : ''}
     </div>`;
@@ -3851,7 +3854,7 @@ async function uploadCatalog(key, input) {
     return;
   }
 
-  if (!confirm(`Substituir catálogo "${label}" (${parsed.length} produtos encontrados)?\n\nUm backup do arquivo atual será criado automaticamente.`)) {
+  if (!confirm(`Isso vai APAGAR os produtos atuais de "${label}" e colocar no lugar os ${parsed.length} produtos deste arquivo (não é uma mesclagem — preços, estoque e tudo mais serão substituídos pelos novos valores).\n\nUm backup do estado atual será criado automaticamente antes de substituir.\n\nContinuar?`)) {
     btn.style.opacity = ''; btn.style.pointerEvents = '';
     input.value = '';
     return;
