@@ -146,8 +146,8 @@
             <label style="grid-column:1/-1;">${lbl('NOME DO PRODUTO')}<input id="ae-f-name" style="${f()}" placeholder="Nome do produto"></label>
             <label>${lbl('PREÇO (R$)')}<input id="ae-f-price" type="number" step="0.01" style="${f()}" placeholder="0.00"></label>
             <label>${lbl('PREÇO ORIGINAL (R$)')}<input id="ae-f-priceOrig" type="number" step="0.01" style="${f()}" placeholder="0.00"></label>
-            <label>${lbl('MODELO')}<input id="ae-f-model" style="${f()}" placeholder="iPhone 15 Pro Max"></label>
-            <label>${lbl('COR')}<input id="ae-f-color" style="${f()}" placeholder="Preto Titânio"></label>
+            <label>${lbl('MODELO')}<input id="ae-f-model" style="${f()}" placeholder="Conjunto Renda"></label>
+            <label>${lbl('COR')}<input id="ae-f-color" style="${f()}" placeholder="Preto"></label>
             <label>${lbl('TAMANHO')}<input id="ae-f-storage" style="${f()}" placeholder="P / M / G / GG"></label>
             <label>${lbl('ESTOQUE')}
               <div style="display:flex;gap:4px;">
@@ -157,7 +157,7 @@
               </div>
             </label>
             <label>${lbl('CONDIÇÃO')}<select id="ae-f-condition" style="${f()}"><option>Novo</option><option>Seminovo</option><option>Usado</option></select></label>
-            <label>${lbl('VENDEDOR')}<input id="ae-f-seller" style="${f()}" placeholder="Apple Store"></label>
+            <label>${lbl('VENDEDOR')}<input id="ae-f-seller" style="${f()}" placeholder="Loja Oficial"></label>
             <label>${lbl('AVALIAÇÃO (0–5)')}<input id="ae-f-rating" type="number" step="0.1" min="0" max="5" style="${f()}" placeholder="5.0"></label>
             <label>${lbl('BADGE PROMO')}<input id="ae-f-badge" style="${f()}" placeholder="Oferta do Dia"></label>
             <label>${lbl('% DESCONTO')}<input id="ae-f-discount" type="number" min="0" max="100" style="${f()}" placeholder="0"></label>
@@ -602,9 +602,9 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <label style="grid-column:1/-1;">${lbl('CATÁLOGO')}<select id="ae-m-catalog" style="${f()}">${catalogOpts}</select></label>
             <label style="grid-column:1/-1;">${lbl('NOME DO PRODUTO *')}<input id="ae-m-name" style="${f()}" placeholder="Nome do produto" required></label>
-            <label>${lbl('ID ÚNICO *')}<input id="ae-m-id" style="${f()}" placeholder="ex: iphone-16-pro-preto-256gb"></label>
+            <label>${lbl('ID ÚNICO *')}<input id="ae-m-id" style="${f()}" placeholder="ex: conjunto-renda-preto-m"></label>
             <label>${lbl('PREÇO (R$) *')}<input id="ae-m-price" type="number" step="0.01" style="${f()}" placeholder="0.00"></label>
-            <label>${lbl('MODELO')}<input id="ae-m-model" style="${f()}" placeholder="iPhone 16 Pro"></label>
+            <label>${lbl('MODELO')}<input id="ae-m-model" style="${f()}" placeholder="Conjunto Renda"></label>
             <label>${lbl('COR')}<input id="ae-m-color" style="${f()}" placeholder="Preto Titânio"></label>
             <label>${lbl('TAMANHO')}<input id="ae-m-storage" style="${f()}" placeholder="P / M / G / GG"></label>
             <label>${lbl('ESTOQUE')}<input id="ae-m-stock" type="number" style="${f()}" placeholder="1"></label>

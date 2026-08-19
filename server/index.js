@@ -1201,7 +1201,7 @@ const sendWhatsAppMessage = async (text) => {
 
 app.post('/api/chat', async (req, res) => {
   const { model, interest, name } = req.body;
-  const message = `Olá! Tenho interesse em ${model || 'um iPhone'}.${
+  const message = `Olá! Tenho interesse em ${model || 'um produto'}.${
     interest ? ` Interesse: ${interest}.` : ''
   }${name ? ` Meu nome é ${name}.` : ''} Gostaria de receber atendimento.`;
   const response = await sendWhatsAppMessage(message);
@@ -1480,7 +1480,7 @@ app.post('/api/auth/forgot-password', authRateLimit(5, 15 * 60 * 1000), async (r
   }
 
   const user = users[idx];
-  const isGuestAccount = user.isGuest === true || /^guest_\d+@jessi\.local$/i.test(user.email || '');
+  const isGuestAccount = user.isGuest === true || /^guest_\d+@guest\.local$/i.test(user.email || '');
   if (isGuestAccount) {
     console.log(`[AUTH][FORGOT] Conta guest ignorada | email=${maskedEmail} | ip=${ip}`);
     return res.json(publicResponse);
@@ -1769,7 +1769,7 @@ app.post('/api/auth/guest', authRateLimit(10, 15 * 60 * 1000), (req, res) => {
   }
 
   // Cria conta guest com e-mail fictício e senha temporária
-  const tempEmail = `guest_${digits}@jessi.local`;
+  const tempEmail = `guest_${digits}@guest.local`;
   const tempPassword = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
   const newUser = {
     id:        uuidv4(),

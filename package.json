@@ -1,7 +1,7 @@
 {
-  "name": "jessi-iphones-site",
+  "name": "damas-secreta-site",
   "version": "1.0.0",
-  "description": "Landing page de vendas de iPhones com chat de atendimento via WhatsApp.",
+  "description": "Loja online de lingerie e moda íntima com chat de atendimento via WhatsApp.",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
@@ -25,6 +25,6 @@
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "author": "jessi.iphones_",
+  "author": "DAMA'S SECRETA",
   "license": "MIT"
 }

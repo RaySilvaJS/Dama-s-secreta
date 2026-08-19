@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
-const FILES = ['iphones.json', 'androids.json', 'smartwatches.json', 'consoles.json', 'acessorios.json', 'informatica.json'];
+const FILES = ['loja.json'];
 
 FILES.forEach(filename => {
   const filePath = path.join(DATA_DIR, filename);

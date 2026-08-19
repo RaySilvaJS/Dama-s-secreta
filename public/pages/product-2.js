@@ -161,9 +161,9 @@
     // Salva o item como compra direta (lido pelo checkout.html?source=buy)
     const cartItem = window.cart && window.cart.items && window.cart.items.find(i => String(i.id) === String(productId));
     if (cartItem) {
-      localStorage.setItem('iphone-vendas-buy-now', JSON.stringify({ ...cartItem, quantidade: 1 }));
+      localStorage.setItem('buy-now', JSON.stringify({ ...cartItem, quantidade: 1 }));
     } else if (window._buyNowProduct) {
-      localStorage.setItem('iphone-vendas-buy-now', JSON.stringify({
+      localStorage.setItem('buy-now', JSON.stringify({
         id: window._buyNowProduct.id,
         nome: window._buyNowProduct.nome,
         preco: window._buyNowProduct.preco,
@@ -295,8 +295,8 @@
     window.location.href = 'checkout.html?source=buy';
   };
 
-  const getFavs = () => { try { return JSON.parse(localStorage.getItem('iphone-favs') || '[]'); } catch { return []; } };
-  const saveFavs = (arr) => { try { localStorage.setItem('iphone-favs', JSON.stringify(arr)); } catch {} };
+  const getFavs = () => { try { return JSON.parse(localStorage.getItem('favorites') || '[]'); } catch { return []; } };
+  const saveFavs = (arr) => { try { localStorage.setItem('favorites', JSON.stringify(arr)); } catch {} };
   window.toggleFav = (id, btn) => {
     let favs = getFavs();
     const idx = favs.indexOf(id);
@@ -565,28 +565,9 @@
     const specEntries = Object.entries(specs);
     const VISIBLE_ROWS = 8;
 
-    const rawName = String(product.name || '');
-    const rawNameLower = rawName.toLowerCase();
     const brandFromSpecs = String(specs?.Marca || specs?.Fabricante || '').trim();
-    const inferBrand = () => {
-      if (brandFromSpecs) return brandFromSpecs;
-      if (/\bapple\b|\biphone\b|\bipad\b|\bmacbook\b/i.test(rawNameLower)) return 'Apple';
-      if (/\bsamsung\b|\bgalaxy\b/i.test(rawNameLower)) return 'Samsung';
-      if (/\bxiaomi\b|\bredmi\b|\bpoco\b/i.test(rawNameLower)) return 'Xiaomi';
-      if (/\bmotorola\b|\bmoto\b/i.test(rawNameLower)) return 'Motorola';
-      return 'Marcas';
-    };
-
-    const inferCategory = () => {
-      if (/\biphone\b|\bsmartphone\b|\bcelular\b|\bgalaxy\b|\bredmi\b|\bmoto\b/i.test(rawNameLower)) return 'Celulares';
-      if (/\bwatch\b|\bsmartwatch\b|\brel[oó]gio\b/i.test(rawNameLower)) return 'Smartwatches';
-      if (/\bmacbook\b|\bnotebook\b|\blaptop\b|\bpc\b/i.test(rawNameLower)) return 'Informática';
-      if (/\bairpods\b|\bfone\b|\bcabo\b|\bcarregador\b|\bcapa\b|\bcase\b|\bacess[oó]rio\b/i.test(rawNameLower)) return 'Acessórios';
-      return 'Produtos';
-    };
-
-    const breadcrumbCategory = inferCategory();
-    const breadcrumbBrand = inferBrand();
+    const breadcrumbCategory = 'Produtos';
+    const breadcrumbBrand = brandFromSpecs || 'Marcas';
 
     const html = `
       <nav class="breadcrumb" aria-label="Navegação">

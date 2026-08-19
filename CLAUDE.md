@@ -25,7 +25,7 @@ Single Express server at `server/index.js` (~670 lines). All routes are defined 
 **Persistence:** All data is flat JSON files in `server/data/`:
 - `users.json` — user accounts (token-based sessions, bcrypt passwords, `role` field for admin/superadmin)
 - `payments.json` — orders with `groupMessageId`, `clientPhone`, `logs[]`, `status`
-- `products.json` — custom product catalog (separate from public catalog JSONs)
+- `loja.json` — the single product catalog, mirrored at `public/data/loja.json`. Managed via the DevOps Catalog Manager (`CATALOG_FILES` in `server/index.js`)
 - `security.json` — blocked IPs, login attempts, notifications
 - `config.json` — maintenance mode flag, deploy history, app version
 - `data/backups/` — backup archives
@@ -35,13 +35,7 @@ There is no database ORM. All helpers (`loadUsers`, `saveUsers`, etc.) are dupli
 
 ### Frontend (`public/`)
 
-**Two separate product sources** — this is the most important architectural detail:
-
-1. **Catalog JSONs** (`public/data/*.json`): Static product catalogs sourced from Mercado Livre — `iphones.json`, `androids.json`, `consoles.json`, `smartwatches.json`, `acessorios.json`, `informatica.json`. These are read-only reference data. API: `GET /api/catalog/product/:id`
-
-2. **Custom products** (`server/data/products.json`): Products added via the admin panel. API: `GET /api/products`
-
-The main `index.html` queries both sources. Product pages (`product.html`) also resolve from both via `GET /api/catalog/product/:id`.
+**Product source:** `public/data/loja.json` is the single product catalog (mirrored from `server/data/loja.json`). API: `GET /api/catalog/product/:id`. `index.html` and `product.html` both resolve products through this endpoint.
 
 **Page JS is split into numbered files** under `public/pages/`:
 - `index-1.js`, `index-2.js`, `index-3.js` — loaded by `index.html` in order

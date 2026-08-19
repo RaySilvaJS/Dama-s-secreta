@@ -14,8 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Items ─────────────────────────────────────────────────────────────────────
   const query       = new URLSearchParams(window.location.search);
   const source      = query.get('source');
-  const storedCart  = JSON.parse(localStorage.getItem('iphone-vendas-cart')    || '[]');
-  const storedBuyNow= JSON.parse(localStorage.getItem('iphone-vendas-buy-now') || 'null');
+  const storedCart  = JSON.parse(localStorage.getItem('cart')    || '[]');
+  const storedBuyNow= JSON.parse(localStorage.getItem('buy-now') || 'null');
   const insurance   = JSON.parse(sessionStorage.getItem('buy-insurance')        || 'null');
 
   const orderItems = source === 'buy'
@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const cpfRaw  = authSession.cpf || '';
     const cpfMask = cpfRaw.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    const isGuest = authSession.email && authSession.email.includes('@jessi.local');
+    const isGuest = authSession.email && authSession.email.includes('@guest.local');
     billingBody.innerHTML = `
       <div class="co-billing-line"><span class="co-billing-key">Nome</span><span class="co-billing-val">${esc(authSession.name || authSession.nome || '')}</span></div>
       ${!isGuest ? `<div class="co-billing-line"><span class="co-billing-key">E-mail</span><span class="co-billing-val">${esc(authSession.email || '')}</span></div>` : ''}
@@ -592,8 +592,8 @@ document.addEventListener('DOMContentLoaded', () => {
       shippingCost: shippingData ? ((hasFreteGratis || couponFreeShipping) ? 0 : shippingData.price) : 0,
       authToken: authSession ? authSession.token : null,
       onSuccess: function(result) {
-        localStorage.setItem('iphone-vendas-cart', '[]');
-        localStorage.removeItem('iphone-vendas-buy-now');
+        localStorage.setItem('cart', '[]');
+        localStorage.removeItem('buy-now');
         sessionStorage.setItem('mp-payment-result', JSON.stringify(result));
         const qs = new URLSearchParams({ orderId: result.orderId, status: result.status || '' });
         if (result.paymentId) qs.set('paymentId', result.paymentId);

@@ -3,7 +3,7 @@ const path = require('path');
 const https = require('https');
 
 const DATA_DIR = path.join(__dirname, '..', 'public', 'data');
-const FILES = ['iphones.json', 'androids.json', 'smartwatches.json', 'consoles.json', 'acessorios.json', 'informatica.json'];
+const FILES = ['loja.json'];
 
 // Busca dados do item na API pública do ML (sem autenticação, para itens públicos)
 const fetchMLItem = (id) => new Promise((resolve) => {

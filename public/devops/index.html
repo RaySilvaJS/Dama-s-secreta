@@ -2471,7 +2471,7 @@ async function loadDashboard() {
   const catEl = document.getElementById('dash-catalogs-summary');
   if (catEl) {
     if (catalogSum && catalogSum.catalogs) {
-      const ICONS = { iphones:'🌸', android:'🩱', consoles:'✨', smartwatches:'🌸', acessorios:'💎', informatica:'🌙', suplementos:'🌊' };
+      const ICONS = { loja:'🌸' };
       const rows = Object.entries(catalogSum.catalogs).map(([key, info]) =>
         `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bg3);font-size:13px">
           <span>${ICONS[key] || '📦'} ${esc(info.label)}</span>

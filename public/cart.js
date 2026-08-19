@@ -1,7 +1,7 @@
 // ========== CARRINHO DE COMPRAS ==========
 
-const CART_KEY = 'iphone-vendas-cart';
-const BUY_NOW_KEY = 'iphone-vendas-buy-now';
+const CART_KEY = 'cart';
+const BUY_NOW_KEY = 'buy-now';
 
 function showCartToast(message, type) {
   var existing = document.getElementById('cart-toast');

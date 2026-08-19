@@ -1,82 +1,57 @@
 
-# 🎁 iphone-vendas - Landing Page Premium
+# 🌸 DAMA'S SECRETA — Loja Online
 
-Uma landing page moderna e responsiva para venda de iPhones com galeria interativa, carrinho de compras, comparador de produtos e integração WhatsApp.
+E-commerce de lingerie e moda íntima com catálogo dinâmico, carrinho de compras (com variação de tamanho/cor), pagamentos via PIX/Mercado Pago, painel administrativo (DevOps) e atendimento via WhatsApp.
 
 ## ✨ Funcionalidades
 
 ### 🛍️ Catálogo de Produtos
-- Grid responsivo com 4+ produtos
-- Cards premium com hover effects
-- Badges: "Novo", "Promoção", "Estoque Baixo"
+- Grid responsivo alimentado por `public/data/loja.json` (gerenciado pelo Catalog Manager do DevOps)
+- Cards com badges: "Novo", "Promoção", "Estoque Baixo", "Frete Grátis"
 - Rating visual com ⭐
-- Preço original vs. desconto
+- Preço original vs. desconto ("De: / Por:")
+- Variações de cor e tamanho por produto
 
-### 🔍 Galeria Interativa
-- Modal com imagem principal em alta qualidade
-- Miniaturas para navegação rápida
-- Zoom ao passar o mouse
-- Swiper.js para carrosséis
-
-### 📋 Filtros Avançados
-- Filtro por modelo (13 Pro, 14, 14 Pro, 15)
-- Filtro por condição (Novo, Seminovo)
-- Filtro por cor (Grafite, Prateado, Dourado, Rosa)
-- Filtro por preço máximo
-- Botão Aplicar e Limpar
+### 🔍 Página de Produto
+- Galeria com miniaturas e zoom
+- Seleção de variação (cor/tamanho) refletida no carrinho
+- Produtos relacionados
 
 ### 🛒 Carrinho de Compras
-- Adicionar/remover products
+- Adicionar/remover produtos (linhas separadas por tamanho)
 - Ajustar quantidades
-- Totalizador automático com impostos (15%)
-- Drawer slide do lado (mobile-friendly)
+- Drawer lateral (mobile-friendly) + página de carrinho dedicada
 - Persistência com LocalStorage
-- Checkout via WhatsApp
+- Checkout com cálculo de frete (Melhor Envio)
 
-### ⚖️ Comparador de Produtos
-- Selecionar até 3 iPhones
-- Tabela lado a lado com especificações
-- Mostrar preço, avaliação, condição
-- Botões diretos para comprar
-
-### ❤️ Favoritos & Histórico
-- Sistema de favoritos com ❤️
-- Recentemente visualizados (até 10)
-- Persistência com LocalStorage
+### ❤️ Favoritos
+- Sistema de favoritos persistido em LocalStorage (`favorites`)
 - Notificações ao adicionar/remover
-
-### 📱 Menu Mobile
-- Hambúrguer responsivo
-- Navigation completa
-- Otimizado para telas pequenas (320px+)
-- Animações suaves
 
 ### 💬 Chat WhatsApp
 - Widget de chat flutuante
-- Atendimento direto via WhatsApp
-- Integração com produtos e carrinho
-- Fallback para link (sem Baileys)
+- Bot via Baileys (grupo administrativo) com resposta contextual por pedido
 
-## 🎨 Design
+### 🔐 Contas e Pedidos
+- Cadastro/login de clientes (token de sessão)
+- Histórico de pedidos ("Meus Pedidos")
 
-- **Tema:** Dark mode premium
-- **Cores:** Purple accent (#9d6cff), Verde sucesso (#4CAF50), Laranja promo (#ff9800)
-- **Tipografia:** Inter + Space Grotesk
-- **Animações:** Transitions suaves, fade-in, scale, slide
-- **Layout:** CSS Grid + Flexbox responsivo
+### 🛠️ Painel DevOps
+- Acessível em `/devops`, autenticado por `ADMIN_TOKEN`
+- Catalog Manager, gestão de pedidos, usuários, cupons, segurança (bloqueio de IP), logs e analytics
 
 ## 🚀 Instalação
 
 ### Pré-requisitos
 - Node.js 14+
-- npm ou yarn
+- npm
 
 ### Setup
 
 ```bash
 # Clonar repositório
 git clone <seu-repo>
-cd iphone-vendas
+cd damas-secreta-site
 
 # Instalar dependências
 npm install
@@ -93,34 +68,37 @@ Acesse: **http://localhost:4000**
 ## 📁 Estrutura
 
 ```
-iphone-vendas/
+damas-secreta-site/
 ├── public/
 │   ├── index.html          # Página principal
-│   ├── admin.html          # Painel admin
-│   ├── app.js              # Lógica principal
-│   ├── cart.js             # Sistema de carrinho
-│   ├── compare.js          # Comparador
-│   ├── admin.js            # Admin logic
-│   └── styles.css          # Estilos completos
+│   ├── product.html        # Página de produto
+│   ├── cart.html           # Carrinho
+│   ├── checkout.html       # Checkout
+│   ├── devops/index.html   # Painel administrativo
+│   ├── app.js, cart.js     # Lógica principal / carrinho
+│   ├── pages/               # JS por página (index-*.js, product-*.js)
+│   ├── js/                 # Módulos auxiliares (auth, checkout, payment...)
+│   └── data/loja.json      # Catálogo de produtos (espelho de server/data/loja.json)
 ├── server/
-│   ├── index.js            # Servidor Express
-│   └── data/
-│       └── products.json   # Banco de dados (JSON)
+│   ├── index.js            # Servidor Express (rotas principais)
+│   ├── admin.js            # API do painel DevOps
+│   ├── payment.js          # Pagamentos/pedidos
+│   ├── whatsapp.js         # Bot Baileys
+│   └── data/                # Persistência em JSON (loja.json, users.json, payments.json...)
 └── package.json
 ```
 
 ## 🔧 API Endpoints
 
 ### Produtos
-- `GET /api/products` - Listar (com filtros)
-- `GET /api/products/:id` - Detalhes
-- `POST /api/products/:id/sold` - Marcar como vendido
-
-### Admin
-- `POST /api/admin/product` - Adicionar produto
+- `GET /api/products` - Listar produtos (com filtros)
+- `GET /api/catalog/product/:id` - Detalhes do produto (+ variações e relacionados)
 
 ### Chat
-- `POST /api/chat` - Enviar mensagem WhatsApp
+- `POST /api/chat` - Enviar mensagem via WhatsApp
+
+### Admin (`/api/admin/*`)
+- Autenticado por `ADMIN_TOKEN` — ver `server/admin.js`
 
 ### Pagamentos Mercado Pago (ver seção dedicada abaixo)
 - `GET  /api/payments/mercado-pago/config` - Public Key + status da configuração
@@ -135,39 +113,29 @@ iphone-vendas/
 ### Product Object
 ```json
 {
-  "id": "iphone-13-pro",
-  "name": "iPhone 13 Pro",
-  "model": "13 Pro",
-  "price": 3899,
-  "priceOriginal": 4299,
+  "id": "MLB7131903700",
+  "name": "Pijama Croped Manga Longa",
+  "model": "Pijama croped longo",
+  "price": 72.19,
+  "priceOriginal": 75,
   "condition": "Novo",
-  "color": "Grafite",
-  "stock": 6,
+  "color": "Rosa",
+  "stock": 1,
   "sold": false,
-  "rating": 4.9,
-  "reviews": 132,
+  "rating": 5,
+  "reviews": 1,
   "isNew": true,
   "isPromo": true,
-  "promoPercent": 10,
+  "promoPercent": 5,
   "images": ["url1", "url2", "url3"],
   "specs": {
-    "Tela": "6.1\" Super Retina XDR",
-    "Processador": "A15 Bionic",
-    "Memória": "128GB",
-    "Câmera": "Tripla 12MP",
-    "Bateria": "Até 22h de vídeo"
+    "Marca": "Elegante",
+    "Gênero": "Feminino",
+    "Material principal": "Poliéster com elastano"
   },
-  "description": "Performance topo de linha..."
+  "description": "Conjunto de 2 peças..."
 }
 ```
-
-## 🎯 Requisitos de Performance
-
-- ✅ Responsivo (320px+)
-- ✅ Lazy loading de imagens
-- ✅ Animações 60fps
-- ✅ LocalStorage para cache
-- 🔄 Lighthouse 80+ (próximo)
 
 ## 🌐 Requisitos de Browser
 
@@ -178,32 +146,22 @@ iphone-vendas/
 
 ## 🔐 Variáveis de Ambiente
 
-```bash
-PORT=4000
-WHATSAPP_NUMBER=5511999999999
-USE_BAILEYS=false  # true para Baileys SDK
-```
+Ver `.env.example` para a lista completa (WhatsApp, Mercado Pago, Melhor Envio, Telegram, ADMIN_TOKEN etc.).
 
 ## 📝 Customização
 
 ### Editar Produtos
-1. Abra `server/data/products.json`
-2. Adicione/edite products
-3. Reinicie o servidor
-
-### Adicionar Produtos via Admin
-1. Acesse `/admin`
-2. Preencha o formulário
-3. Clique "Adicionar"
+1. Acesse `/devops` → Catalog Manager, ou
+2. Edite diretamente `server/data/loja.json` e reinicie o servidor
 
 ### Mudar Cores
-Edite as variáveis CSS em `public/styles.css`:
+Cada página HTML define suas próprias variáveis CSS inline (`:root`), não há folha de estilo compartilhada exceto `styles.css` (usado pelo `admin.html`):
 ```css
 :root {
-  --accent: #9d6cff;
-  --accent-2: #7f5bff;
-  --blue: #6fd8ff;
-  /* ... */
+  --blue: #2563EB;
+  --yellow: #F59E0B;
+  --green: #16A34A;
+  --bg: #F1F5F9;
 }
 ```
 
@@ -317,8 +275,8 @@ git push heroku main
 
 ### Docker
 ```bash
-docker build -t iphone-vendas .
-docker run -p 4000:4000 iphone-vendas
+docker build -t damas-secreta-site .
+docker run -p 4000:4000 damas-secreta-site
 ```
 
 ## 📞 Suporte

@@ -349,7 +349,6 @@ const _buildProductCardHTML = (product) => {
   const precoFinal = product.price;
   // Preço original (de-para) sempre exibido, independente da categoria
   const precoOriginal = Number(product.priceOriginal) > precoFinal ? product.priceOriginal : precoFinal;
-  const isIphone = !!(product.name && product.name.toLowerCase().includes('iphone'));
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
   const isLowStock = Number(stock) <= 5;
   const stockLabel = isLowStock ? `Últimas ${stock} unidades!` : `${stock} unidades em estoque`;
@@ -359,8 +358,6 @@ const _buildProductCardHTML = (product) => {
   <div class="olx-adcard__media">
 
       ${isUnavailable ? `<div style="position:absolute;top:0;right:0;background:#475569;color:#fff;padding:2px 6px;font-size:8px;font-weight:800;letter-spacing:.05em;border-radius:0 0 0 4px;z-index:2;">ESGOTADO</div>` : ''}
-      ${isIphone ? `<div class="loja-oficial-badge">${ICONS.smartphone} LOJA OFICIAL APPLE</div>` : ''}
-
       <button
         type="button"
         class="olx-adcard__favorite"
@@ -384,7 +381,7 @@ const _buildProductCardHTML = (product) => {
 
       <p class="olx-adcard__sku">Código/SKU: ${product.id}</p>
 
-      ${Number(descontoHoje) > 0 && isIphone ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
+      ${Number(descontoHoje) > 0 ? `<div class="desconto-hoje-badge">${ICONS.zap} Comprando HOJE: ${descontoHoje}% OFF</div>` : ''}
 
       <div class="olx-adcard__seller-info">
         <span class="seller-name">${seller}</span>
@@ -797,7 +794,7 @@ if (chatClose) {
 chatOptions.forEach((button) => {
   button.addEventListener("click", () => {
     const interest = button.dataset.interest;
-    startChat("iPhone", interest);
+    startChat("produtos", interest);
   });
 });
 
