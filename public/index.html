@@ -703,7 +703,8 @@ header {
 .olx-adcard__actions .button-ml-add:hover { background: #D6E8FF; border-color: #3483FA; }
 
 .olx-adcard__ml-cta {
-  flex: 1 1 100%;
+  flex: 0 0 auto;
+  width: 100%;
   display: flex; align-items: stretch; min-width: 0;
   border-radius: 7px; overflow: hidden; text-decoration: none;
   transition: transform .15s;
@@ -1015,6 +1016,12 @@ header {
     font-size: 11px;
     padding: 7px 6px;
   }
+  .olx-adcard__ml-cta-icon {
+    width: 36px; height: 34px;
+    background-size: 93px auto;
+    background-position: 0 -11px;
+  }
+  .olx-adcard__ml-cta-title { font-size: 10.5px; padding: 5px 6px; }
 }
 
 @media (max-width: 600px) {
