@@ -660,7 +660,7 @@ header {
 .olx-adcard__actions {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   margin-top: auto;
   padding-top: 8px;
   min-width: 0;
@@ -679,7 +679,9 @@ header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   text-align: center;
+  text-decoration: none;
   white-space: normal;
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -697,6 +699,22 @@ header {
   color: #fff;
 }
 .olx-adcard__actions .button-secondary:hover { background: var(--rose-dark); }
+
+.olx-adcard__actions .button-ml-add {
+  background: #EBF2FF;
+  color: #3483FA;
+  border: 1px solid #C2D9FF;
+}
+.olx-adcard__actions .button-ml-add:hover { background: #D6E8FF; border-color: #3483FA; }
+
+.olx-adcard__actions .button-ml-buy {
+  flex: 1 1 100%;
+  background: linear-gradient(135deg, #FFE600 0%, #FFD200 100%);
+  color: #1a1a2e;
+  border: 1px solid rgba(0,0,0,.08);
+}
+.olx-adcard__actions .button-ml-buy:hover { filter: brightness(1.05); }
+.olx-adcard__actions .button-ml-buy img { height: 14px; width: auto; object-fit: contain; flex-shrink: 0; }
 
 /* BOTÕES GERAIS */
 .button {

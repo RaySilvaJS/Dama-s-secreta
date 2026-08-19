@@ -9,6 +9,8 @@ const ICONS = {
   heart: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   heartFilled: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#e53e3e" stroke="#e53e3e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   smartphone: `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+  buy: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  cart: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`,
 };
 
 const productsGrid = document.getElementById("products-grid");
@@ -350,6 +352,8 @@ const _buildProductCardHTML = (product) => {
   // Preço original (de-para) sempre exibido, independente da categoria
   const precoOriginal = Number(product.priceOriginal) > precoFinal ? product.priceOriginal : precoFinal;
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
+  const mlUrl = product.url ||
+    (String(product.id || '').startsWith('MLB') ? 'https://www.mercadolivre.com.br/p/' + product.id : '');
   const isLowStock = Number(stock) <= 5;
   const stockLabel = isLowStock ? `Últimas ${stock} unidades!` : `${stock} unidades em estoque`;
 
@@ -415,8 +419,9 @@ const _buildProductCardHTML = (product) => {
       <div class="olx-adcard__actions">
         ${isUnavailable
           ? `<button class="button button-primary" type="button" disabled style="opacity:.6;cursor:not-allowed;">Esgotado</button>`
-          : `<button class="button button-primary" type="button" onclick="buyNow('${product.id}', this)">Comprar Agora</button>
-        <button class="button button-secondary" type="button" onclick="addToCart('${product.id}', this)">Adicionar ao Carrinho</button>`}
+          : `<button class="button button-primary" type="button" onclick="buyNow('${product.id}', this)">${ICONS.buy} Comprar Agora</button>
+        <button class="button button-ml-add" type="button" onclick="addToCart('${product.id}', this)">${ICONS.cart} Adicionar ao Carrinho</button>
+        ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="button button-ml-buy">Comprar no <img src="/assets/mercado-livre-logo.png" alt="Mercado Livre"></a>` : ''}`}
       </div>
 
   </div>

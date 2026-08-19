@@ -665,7 +665,7 @@
                 ${IC.cart} Adicionar ao Carrinho
               </button>`}
               ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="btn btn-ml-buy">
-                Comprar em <img src="/assets/mercado-livre-logo.png" alt="Mercado Livre">
+                Comprar no <img src="/assets/mercado-livre-logo.png" alt="Mercado Livre">
               </a>` : ''}
             </div>
           </div>
