@@ -664,6 +664,9 @@
               <button class="btn btn-ml-add" onclick="addToCart('${product.id}', this)">
                 ${IC.cart} Adicionar ao Carrinho
               </button>`}
+              ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="btn btn-ml-buy">
+                <span class="ml-logo-badge">ML</span> Comprar no Mercado Livre
+              </a>` : ''}
             </div>
           </div>
         </aside>

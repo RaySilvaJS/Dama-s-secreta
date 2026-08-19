@@ -651,6 +651,11 @@
     .btn-ghost:hover { border-color: var(--blue); color: var(--blue); }
     .btn-ml-add { background: #EBF2FF; color: #3483FA; border: 1px solid #C2D9FF; }
     .btn-ml-add:hover { background: #D6E8FF; border-color: #3483FA; }
+    .btn-ml-buy {
+      background: linear-gradient(135deg, #FFE600 0%, #FFD200 100%);
+      color: #1a1a2e; border: 1px solid rgba(0,0,0,.08);
+    }
+    .btn-ml-buy:hover { filter: brightness(1.05); }
     .actions-grid { display: flex; flex-direction: column; gap: 10px; }
     .actions-secondary { display: flex; gap: 10px; }
 
@@ -900,7 +905,7 @@
     .ml-logo-badge {
       width: 28px; height: 28px; background: #3483FA; border-radius: 50%;
       color: #FFE600; font-size: 10px; font-weight: 900;
-      align-items: center; justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; letter-spacing: -.02em; user-select: none;
     }
     .ml-compare-badge {
