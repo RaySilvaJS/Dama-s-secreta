@@ -367,10 +367,12 @@ const _buildProductCardHTML = (product) => {
         ${isFav ? ICONS.heartFilled : ICONS.heart}
       </button>
 
-      ${mainImage
-        ? `<img src="${mainImage}" alt="${product.name}" loading="lazy" decoding="async">`
-        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#F1F5F9;">${ICONS.smartphone}</div>`
-      }
+      <a href="${productUrl}" class="olx-adcard__media-link" aria-label="${product.name}">
+        ${mainImage
+          ? `<img src="${mainImage}" alt="${product.name}" loading="lazy" decoding="async">`
+          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#F1F5F9;">${ICONS.smartphone}</div>`
+        }
+      </a>
   </div>
 
   <div class="olx-adcard__content">
