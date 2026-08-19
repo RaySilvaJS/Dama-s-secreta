@@ -258,6 +258,67 @@ header {
 .location-row:hover { color: var(--rose-dark); }
 .location-row svg { flex-shrink: 0; color: var(--rose-dark); }
 .location-row .location-chevron { margin-left: 2px; }
+.location-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== MODAL DE ENDEREÇO ===== */
+.addr-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 5000;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; visibility: hidden;
+  transition: opacity .2s, visibility .2s;
+  padding: 16px;
+}
+.addr-modal-overlay.open { opacity: 1; visibility: visible; }
+.addr-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: min(420px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.addr-modal__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: #fff; z-index: 1;
+}
+.addr-modal__header h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+.addr-modal__close {
+  border: none; background: var(--bg); width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-2);
+}
+.addr-modal__close:hover { background: var(--rose-light); color: var(--rose-dark); }
+.addr-modal__body { padding: 18px 20px; display: grid; gap: 14px; }
+.addr-geoloc-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 12px; border-radius: 10px; border: none;
+  background: var(--rose-light); color: var(--rose-dark);
+  font-weight: 700; font-size: 13.5px; cursor: pointer;
+}
+.addr-geoloc-btn:hover { background: #FFE0EE; }
+.addr-geoloc-btn:disabled { opacity: .6; cursor: default; }
+.addr-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
+.addr-field input, .addr-field textarea {
+  width: 100%; padding: 11px 13px; border-radius: 9px; border: 1.5px solid var(--border);
+  font-size: 14px; font-family: inherit; color: var(--text); background: #fff;
+}
+.addr-field input:focus, .addr-field textarea:focus { outline: none; border-color: var(--rose); }
+.addr-field input[readonly] { background: var(--bg); color: var(--text-2); }
+.addr-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.addr-modal__error {
+  display: none; background: #FFF0F0; color: #C53030; font-size: 12.5px;
+  padding: 10px 12px; border-radius: 8px; font-weight: 600;
+}
+.addr-modal__error.visible { display: block; }
+.addr-modal__save {
+  width: 100%; padding: 13px; border-radius: 10px; border: none;
+  background: var(--rose-dark); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.addr-modal__save:hover { background: var(--rose-deep); }
+.addr-modal__save:disabled { opacity: .7; cursor: default; }
 
 .categories-bar {
   background: #fff;
@@ -1580,6 +1641,64 @@ header {
   <svg class="location-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
 </div>
 
+<!-- MODAL DE ENDEREÇO -->
+<div class="addr-modal-overlay" id="addr-modal-overlay">
+  <div class="addr-modal" role="dialog" aria-modal="true" aria-labelledby="addr-modal-title">
+    <div class="addr-modal__header">
+      <h3 id="addr-modal-title">Endereço de entrega</h3>
+      <button type="button" class="addr-modal__close" id="addr-modal-close" aria-label="Fechar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="addr-modal__body">
+      <button type="button" class="addr-geoloc-btn" id="addr-geoloc-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        Usar minha localização atual
+      </button>
+
+      <div class="addr-field">
+        <label for="am-cep">CEP</label>
+        <input id="am-cep" inputmode="numeric" placeholder="Ex.: 05410-001" maxlength="9"/>
+      </div>
+
+      <div class="addr-field">
+        <label for="am-rua">Rua / Avenida</label>
+        <input id="am-rua" placeholder="Aguardando CEP..." readonly/>
+      </div>
+
+      <div class="addr-field-row">
+        <div class="addr-field">
+          <label for="am-numero">Número</label>
+          <input id="am-numero" placeholder="Ex.: 123"/>
+        </div>
+        <div class="addr-field">
+          <label for="am-complemento">Complemento</label>
+          <input id="am-complemento" placeholder="Opcional"/>
+        </div>
+      </div>
+
+      <div class="addr-field">
+        <label for="am-bairro">Bairro</label>
+        <input id="am-bairro" placeholder="Aguardando CEP..." readonly/>
+      </div>
+
+      <div class="addr-field-row">
+        <div class="addr-field">
+          <label for="am-cidade">Cidade</label>
+          <input id="am-cidade" placeholder="Aguardando CEP..." readonly/>
+        </div>
+        <div class="addr-field">
+          <label for="am-estado">Estado</label>
+          <input id="am-estado" placeholder="UF" readonly/>
+        </div>
+      </div>
+
+      <div class="addr-modal__error" id="addr-modal-error"></div>
+      <button type="button" class="addr-modal__save" id="addr-modal-save">Salvar endereço</button>
+    </div>
+  </div>
+</div>
+
 <!-- CATEGORIAS -->
 <div class="categories-bar">
   <div class="categories">
@@ -1754,6 +1873,7 @@ header {
 <script src="js/loja-oficial.js"></script>
 <script src="app.js"></script>
 <script src="/js/banner-carousel.js"></script>
+<script src="/js/address-picker.js"></script>
 
 <script src="/pages/index-1.js"></script>
 
