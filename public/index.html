@@ -240,7 +240,25 @@ header {
 }
 .trust-item .ti-icon { font-size: 15px; color: var(--rose-dark); }
 
-/* ===== CATEGORIES (ICON STRIP) ===== */
+/* ===== LOCALIZAÇÃO + CATEGORIAS (ESTILO ABA/TAG) ===== */
+.location-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.location-row:hover { color: var(--rose-dark); }
+.location-row svg { flex-shrink: 0; color: var(--rose-dark); }
+.location-row .location-chevron { margin-left: 2px; }
+
 .categories-bar {
   background: #fff;
   border-bottom: 2px solid var(--border);
@@ -253,9 +271,9 @@ header {
 
 .categories {
   display: flex;
-  align-items: flex-start;
-  padding: 14px 20px;
-  gap: 4px;
+  align-items: center;
+  padding: 0 20px;
+  gap: 22px;
   max-width: 1400px;
   margin: 0 auto;
   width: max-content;
@@ -264,46 +282,26 @@ header {
 
 .cat-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 7px;
   cursor: pointer;
-  padding: 8px 14px;
-  border-radius: 12px;
-  transition: background .15s;
+  padding: 12px 0;
+  border-bottom: 2.5px solid transparent;
+  transition: border-color .15s;
   user-select: none;
   flex-shrink: 0;
-  min-width: 80px;
 }
-.cat-item:hover { background: var(--rose-light); }
-.cat-item:hover .cat-item__icon { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(180,50,100,.18); }
-.cat-item.active .cat-item__icon {
-  box-shadow: 0 0 0 2.5px var(--rose), 0 4px 12px rgba(180,50,100,.25);
-}
-.cat-item.active .cat-item__name { color: var(--rose-dark); font-weight: 700; }
+.cat-item:hover .cat-item__name { color: var(--rose-dark); }
+.cat-item.active { border-bottom-color: var(--rose-dark); }
+.cat-item.active .cat-item__name { color: var(--text); font-weight: 700; }
 
-.cat-item__icon {
-  width: 58px;
-  height: 58px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform .15s, box-shadow .15s;
-  flex-shrink: 0;
-  overflow: hidden;
-  font-size: 28px;
-  line-height: 1;
-}
+.cat-item__icon { display: none; }
 
 .cat-item__name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-2);
-  text-align: center;
   white-space: nowrap;
   transition: color .15s;
-  line-height: 1.2;
 }
 
 /* ===== HERO BANNER (carrossel) ===== */
@@ -1575,11 +1573,22 @@ header {
 <!-- HERO BANNER (carrossel) -->
 <div class="banner-carousel" id="banner-carousel"></div>
 
+<!-- ENTREGA -->
+<div class="location-row" id="location-row">
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+  <span id="location-row-text">Envio para todo o Brasil</span>
+  <svg class="location-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+</div>
+
 <!-- CATEGORIAS -->
 <div class="categories-bar">
   <div class="categories">
 
-    <div class="cat-item active" data-catalog="conjuntos">
+    <div class="cat-item active" data-catalog="todos">
+      <span class="cat-item__name">Tudo</span>
+    </div>
+
+    <div class="cat-item" data-catalog="conjuntos">
       <div class="cat-item__icon" style="background:linear-gradient(135deg,#FFF0F6,#FFD6E8);">💑</div>
       <span class="cat-item__name">Conjuntos</span>
     </div>

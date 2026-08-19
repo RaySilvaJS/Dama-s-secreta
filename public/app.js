@@ -32,6 +32,7 @@ let gallerySwiper = null;
 
 // ===== CATÁLOGOS POR CATEGORIA =====
 const CATALOGS = {
+  todos:        '/api/products',
   conjuntos:    '/api/products?category=conjuntos',
   lingeries:    '/api/products?category=lingeries',
   bodies:       '/api/products?category=bodies',
@@ -44,6 +45,7 @@ const CATALOGS = {
 };
 
 const CATALOG_LABELS = {
+  todos:        'Tudo',
   conjuntos:    'Conjuntos',
   lingeries:    'Lingeries',
   bodies:       'Bodies',
@@ -158,7 +160,7 @@ const loadCatalog = async (key) => {
 
 const getCurrentCatalogKey = () => {
   const active = document.querySelector('.categories .cat-item.active');
-  return active?.dataset.catalog || 'pijamas';
+  return active?.dataset.catalog || 'todos';
 };
 
 const formatCurrency = (value) =>
@@ -726,7 +728,7 @@ const initCategories = async () => {
     const categories = await res.json();
     const catKeys = new Set(categories.map(c => c.key));
     document.querySelectorAll('.categories .cat-item').forEach(btn => {
-      if (!catKeys.has(btn.dataset.catalog)) btn.style.display = 'none';
+      if (btn.dataset.catalog !== 'todos' && !catKeys.has(btn.dataset.catalog)) btn.style.display = 'none';
     });
     document.querySelectorAll('.drawer-link[data-catalog]').forEach(link => {
       if (!catKeys.has(link.dataset.catalog)) link.style.display = 'none';
