@@ -664,8 +664,15 @@
               <button class="btn btn-ml-add" onclick="addToCart('${product.id}', this)">
                 ${IC.cart} Adicionar ao Carrinho
               </button>`}
-              ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="btn btn-ml-buy">
-                Comprar no <img src="/assets/mercado-livre-logo.png" alt="Mercado Livre">
+              ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="ml-cta">
+                <span class="ml-cta__icon" aria-hidden="true"></span>
+                <span class="ml-cta__body">
+                  <span class="ml-cta__copy">
+                    <span class="ml-cta__title">Comprar no Mercado Livre</span>
+                    <span class="ml-cta__subtitle">Pagamento seguro · Até 12x sem juros</span>
+                  </span>
+                  <svg class="ml-cta__arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+                </span>
               </a>` : ''}
             </div>
           </div>

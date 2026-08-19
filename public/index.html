@@ -707,14 +707,29 @@ header {
 }
 .olx-adcard__actions .button-ml-add:hover { background: #D6E8FF; border-color: #3483FA; }
 
-.olx-adcard__actions .button-ml-buy {
+.olx-adcard__ml-cta {
   flex: 1 1 100%;
-  background: linear-gradient(135deg, #FFE600 0%, #FFD200 100%);
-  color: #1a1a2e;
-  border: 1px solid rgba(0,0,0,.08);
+  display: flex; align-items: stretch; min-width: 0;
+  border-radius: 7px; overflow: hidden; text-decoration: none;
+  transition: transform .15s;
 }
-.olx-adcard__actions .button-ml-buy:hover { filter: brightness(1.05); }
-.olx-adcard__actions .button-ml-buy img { height: 14px; width: auto; object-fit: contain; flex-shrink: 0; }
+.olx-adcard__ml-cta:hover { transform: translateY(-1px); }
+.olx-adcard__ml-cta-icon {
+  flex-shrink: 0; width: 44px; height: 40px;
+  background-color: #14141f;
+  background-image: url('/assets/mercado-livre-logo.png');
+  background-repeat: no-repeat;
+  background-size: 113px auto;
+  background-position: 0 -14px;
+}
+.olx-adcard__ml-cta-title {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 8px;
+  background: linear-gradient(135deg, #FFE600 0%, #FFD200 100%);
+  color: #1a1a2e; font-size: 11.5px; font-weight: 800;
+  text-align: center; line-height: 1.2; overflow-wrap: anywhere;
+}
 
 /* BOTÕES GERAIS */
 .button {

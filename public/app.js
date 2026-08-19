@@ -421,7 +421,10 @@ const _buildProductCardHTML = (product) => {
           ? `<button class="button button-primary" type="button" disabled style="opacity:.6;cursor:not-allowed;">Esgotado</button>`
           : `<button class="button button-primary" type="button" onclick="buyNow('${product.id}', this)">${ICONS.buy} Comprar Agora</button>
         <button class="button button-ml-add" type="button" onclick="addToCart('${product.id}', this)">${ICONS.cart} Adicionar ao Carrinho</button>
-        ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="button button-ml-buy">Comprar no <img src="/assets/mercado-livre-logo.png" alt="Mercado Livre"></a>` : ''}`}
+        ${mlUrl ? `<a href="${mlUrl}" target="_blank" rel="noopener noreferrer nofollow" class="olx-adcard__ml-cta">
+          <span class="olx-adcard__ml-cta-icon" aria-hidden="true"></span>
+          <span class="olx-adcard__ml-cta-title">Comprar no Mercado Livre</span>
+        </a>` : ''}`}
       </div>
 
   </div>
