@@ -346,8 +346,9 @@ const _buildProductCardHTML = (product) => {
   const isFav = _getFavs().includes(String(product.id));
   const extras = getOrCreateCardExtras(product.id);
   const { brinde, descontoHoje, freteGratis, stock } = extras;
-  const precoOriginal = product.price;
-  const precoFinal = precoOriginal * (1 - (Number(descontoHoje) || 0) / 100);
+  const precoFinal = product.price;
+  // Preço original (de-para) sempre exibido, independente da categoria
+  const precoOriginal = Number(product.priceOriginal) > precoFinal ? product.priceOriginal : precoFinal;
   const isIphone = !!(product.name && product.name.toLowerCase().includes('iphone'));
   const isUnavailable = product.sold === true || Number(product.stock) <= 0;
   const isLowStock = Number(stock) <= 5;
@@ -390,13 +391,11 @@ const _buildProductCardHTML = (product) => {
         ${product.rating ? `<span class="rating">${ICONS.star} ${product.rating}</span>` : ""}
       </div>
 
-      ${isIphone ? `<div class="preco-original-wrap">
+      <div class="preco-original-wrap">
         <span class="olx-adcard__old-price">${formatCurrency(precoOriginal)}</span>
       </div>
       <h3 class="olx-adcard__price">${formatCurrency(precoFinal)}</h3>
-      <div class="olx-adcard__price-info">${getInstallmentInfo(precoFinal)}</div>` : `
-      <h3 class="olx-adcard__price">${formatCurrency(precoOriginal)}</h3>
-      <div class="olx-adcard__price-info">${getInstallmentInfo(precoOriginal)}</div>`}
+      <div class="olx-adcard__price-info">${getInstallmentInfo(precoFinal)}</div>
 
       <div class="entrega-full-wrap">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>

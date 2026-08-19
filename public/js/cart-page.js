@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const subtotal = items.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
     const totalCount = items.reduce((sum, item) => sum + item.quantidade, 0);
 
-    items.forEach((item) => {
+    items.forEach((item, index) => {
       // [LOJA OFICIAL] Monta exibição de preço com desconto riscado
       const precoUnitDisplay = item.precoOriginal
         ? `<s style="color:#94A3B8;font-size:12px">${formatBRL(item.precoOriginal)}</s> <span style="color:#16A34A;font-weight:700">${formatBRL(item.preco)}</span>`
@@ -43,17 +43,18 @@ document.addEventListener('DOMContentLoaded', () => {
         <img src="${item.imagem}" alt="${item.nome}" />
         <div class="item-details">
           <h2>${item.nome}</h2>
+          ${item.tamanho ? `<p style="color:#6B7280;font-size:12px;">Tamanho: <strong>${item.tamanho}</strong></p>` : ''}
           ${Number(item.descontoHoje || 0) > 0 ? `<p style="background:#FFF3CD;color:#92400E;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px;margin-bottom:4px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${item.descontoHoje}% OFF hoje</p>` : ''}
           <p>Preço un: ${precoUnitDisplay}</p>
           <div class="quantity-controls">
-            <button type="button" data-action="decrease" data-id="${item.id}">−</button>
+            <button type="button" data-action="decrease" data-idx="${index}">−</button>
             <span>${item.quantidade}</span>
-            <button type="button" data-action="increase" data-id="${item.id}">+</button>
+            <button type="button" data-action="increase" data-idx="${index}">+</button>
           </div>
         </div>
         <div class="item-actions">
           <div class="item-subtotal">${subtotalDisplay}</div>
-          <button type="button" data-action="remove" data-id="${item.id}">Remover</button>
+          <button type="button" data-action="remove" data-idx="${index}">Remover</button>
         </div>
       `;
 
@@ -61,18 +62,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = event.target.closest('button');
         if (!button) return;
         const action = button.dataset.action;
-        const id = button.dataset.id;
-        const current = cart.items.find((entry) => entry.id === id);
+        const current = cart.items[Number(button.dataset.idx)];
         if (!current) return;
 
         if (action === 'decrease') {
-          cart.updateQuantity(id, current.quantidade - 1);
+          cart.updateQuantity(current.id, current.quantidade - 1, current.tamanho);
         }
         if (action === 'increase') {
-          cart.updateQuantity(id, current.quantidade + 1);
+          cart.updateQuantity(current.id, current.quantidade + 1, current.tamanho);
         }
         if (action === 'remove') {
-          cart.removeItem(id);
+          cart.removeItem(current.id, current.tamanho);
         }
         render();
       });
