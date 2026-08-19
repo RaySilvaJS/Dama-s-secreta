@@ -1860,6 +1860,13 @@ app.post('/api/auth/otp/verify', authRateLimit(10, 5 * 60 * 1000), (req, res) =>
   });
 });
 
+// ── Banners do carrossel da home (pública) ────────────────────────────────────
+const { getActiveBanners } = require('./banners');
+
+app.get('/api/banners', (req, res) => {
+  res.json({ banners: getActiveBanners() });
+});
+
 // ── Coupon validation (pública, autenticada ou não) ───────────────────────────
 const { validateCoupon } = require('./coupons');
 

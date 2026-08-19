@@ -520,6 +520,7 @@ tbody tr:last-child td { border-bottom: none; }
     <div class="nav-item" data-page="catalogs"><span class="ni-icon">📦</span> Catálogos</div>
     <div class="nav-item" data-page="produtos"><span class="ni-icon">📱</span> Produtos</div>
     <div class="nav-item" data-page="cupons"><span class="ni-icon">🎟️</span> Cupons</div>
+    <div class="nav-item" data-page="banners"><span class="ni-icon">🖼️</span> Banners</div>
     <div class="nav-item" data-page="logs"><span class="ni-icon">📋</span> Logs</div>
     <div class="nav-item" data-page="backup"><span class="ni-icon">💾</span> Backup</div>
     <div class="nav-item" data-page="files"><span class="ni-icon">📁</span> Arquivos</div>
@@ -2135,6 +2136,56 @@ tbody tr:last-child td { border-bottom: none; }
       </div>
     </div><!-- /page-cupons -->
 
+    <div class="page" id="page-banners">
+      <div class="grid-2" style="align-items:start;gap:16px">
+
+        <!-- Formulário de criação/edição -->
+        <div class="card">
+          <h3 id="banner-form-title-dv">Adicionar Novo Banner</h3>
+          <input type="hidden" id="banner-edit-id-dv"/>
+          <div style="display:grid;gap:10px">
+            <div>
+              <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Imagem <small style="text-transform:none">(desktop 1920×600, mobile ajusta automático via crop)</small></label>
+              <input type="file" id="bv-image-input" accept="image/*" onchange="uploadBannerImage(this)" style="font-size:12px"/>
+              <div id="bv-image-preview" style="margin-top:8px"></div>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Link de destino <small style="text-transform:none">(opcional)</small></label>
+              <input id="bv-link" class="input" style="width:100%" placeholder="https://damassecreta.com/product.html?id=..."/>
+            </div>
+            <div class="grid-2">
+              <div>
+                <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Ordem</label>
+                <input id="bv-order" type="number" min="0" class="input" style="width:100%" placeholder="0 = primeiro"/>
+              </div>
+              <div style="display:flex;align-items:flex-end">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+                  <input type="checkbox" id="bv-active" checked style="width:15px;height:15px"/> Banner ativo
+                </label>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-blue" id="banner-save-btn-dv" onclick="saveBannerDv()">Adicionar Banner</button>
+              <button class="btn btn-ghost" id="banner-cancel-btn-dv" onclick="resetBannerFormDv()" style="display:none">Cancelar</button>
+            </div>
+            <div id="banner-feedback-dv" style="font-size:12px;display:none"></div>
+          </div>
+        </div>
+
+        <!-- Lista de banners -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="margin:0;font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Banners cadastrados</h3>
+            <button class="btn btn-ghost" onclick="loadBanners()">↺ Atualizar</button>
+          </div>
+          <div id="banner-list-dv" style="display:flex;flex-direction:column;gap:10px">
+            <div class="empty-state">Carregando...</div>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /page-banners -->
+
   </div><!-- /content -->
 </div><!-- /main -->
 </div><!-- /layout -->
@@ -2217,7 +2268,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => showPage(el.dataset.page));
 });
 
-const pageTitles = { site: '🌎 SITE — Central de Monitoramento', dashboard: 'Dashboard', whatsapp: 'WhatsApp Bot', monitor: 'Monitoramento do Servidor', deploy: 'Deploy & Atualizações', terminal: '💻 Terminal', logs: 'Visualizador de Logs', backup: 'Backup', files: 'Gerenciador de Arquivos', security: 'Segurança', audit: 'Auditoria', alerts: 'Alertas & Notificações', orders: 'Gestão de Pedidos', catalogs: 'Gerenciador de Catálogos', analytics: 'Analytics & Estatísticas', settings: 'Configurações', clientes: 'Clientes Cadastrados', produtos: '📱 Produtos Personalizados', cupons: '🎟️ Cupons de Desconto' };
+const pageTitles = { site: '🌎 SITE — Central de Monitoramento', dashboard: 'Dashboard', whatsapp: 'WhatsApp Bot', monitor: 'Monitoramento do Servidor', deploy: 'Deploy & Atualizações', terminal: '💻 Terminal', logs: 'Visualizador de Logs', backup: 'Backup', files: 'Gerenciador de Arquivos', security: 'Segurança', audit: 'Auditoria', alerts: 'Alertas & Notificações', orders: 'Gestão de Pedidos', catalogs: 'Gerenciador de Catálogos', analytics: 'Analytics & Estatísticas', settings: 'Configurações', clientes: 'Clientes Cadastrados', produtos: '📱 Produtos Personalizados', cupons: '🎟️ Cupons de Desconto', banners: '🖼️ Banners do Carrossel' };
 
 function toggleMobMenu() {
   document.getElementById('sidebar').classList.toggle('mob-open');
@@ -2264,6 +2315,7 @@ function loadPage(name) {
   else if (name === 'settings') loadSettings();
   else if (name === 'produtos') loadProdutos();
   else if (name === 'cupons') loadCupons();
+  else if (name === 'banners') loadBanners();
 }
 
 function refreshCurrent() { loadPage(currentPage); }
@@ -6010,6 +6062,165 @@ async function deleteCouponDv(id) {
     const d = await api.del(`/api/admin/coupons/${id}`);
     if (!d?.ok) throw new Error(d?.error);
     await loadCupons();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════
+// BANNERS DO CARROSSEL
+// ═══════════════════════════════════════════════
+let pendingBannerImage = '';
+
+function renderBannerImagePreview(url) {
+  const box = document.getElementById('bv-image-preview');
+  if (!box) return;
+  box.innerHTML = url
+    ? `<img src="${url}" alt="preview" style="max-width:100%;max-height:120px;object-fit:contain;border-radius:6px;border:1px solid var(--border)"/>`
+    : '<span style="font-size:11px;color:var(--muted)">Nenhuma imagem enviada ainda.</span>';
+}
+
+async function uploadBannerImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const dataUrl = e.target.result;
+    const r = await api.post('/api/admin/upload', { dataUrl, filename: file.name });
+    if (r?.success) { pendingBannerImage = r.url; renderBannerImagePreview(pendingBannerImage); }
+    else alert('Erro: ' + (r?.error || 'Falha no upload da imagem.'));
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+async function loadBanners() {
+  const el = document.getElementById('banner-list-dv');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">Carregando...</div>';
+  try {
+    const d = await api.get('/api/admin/banners');
+    if (!d?.ok) throw new Error(d?.error || 'Erro');
+    window._dvBanners = d.banners;
+    if (!d.banners.length) { el.innerHTML = '<div class="empty-state">Nenhum banner cadastrado ainda. O site está exibindo a imagem padrão.</div>'; return; }
+
+    el.innerHTML = d.banners.map((b, i) => `
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;gap:12px;align-items:center">
+        <img src="${esc(b.image)}" alt="banner" style="width:90px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)"/>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${b.active?'var(--green)':'var(--muted)'}22;color:${b.active?'var(--green)':'var(--muted)'};border:1px solid ${b.active?'var(--green)':'var(--muted)'}44">${b.active?'Ativo':'Inativo'}</span>
+            <span style="font-size:10px;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:4px">Ordem: ${b.order ?? 0}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.link ? esc(b.link) : '<em>Sem link — apenas exibição</em>'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" title="Mover para cima" onclick="moveBannerDv('${b.id}',-1)" ${i===0?'disabled':''}>↑</button>
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" title="Mover para baixo" onclick="moveBannerDv('${b.id}',1)" ${i===d.banners.length-1?'disabled':''}>↓</button>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" onclick="editBannerDv('${b.id}')">Editar</button>
+            <button class="btn ${b.active?'btn-red':'btn-green'}" style="font-size:11px;padding:4px 8px" onclick="toggleBannerDv('${b.id}',${!b.active})">${b.active?'Desativar':'Ativar'}</button>
+            <button class="btn btn-red" style="font-size:11px;padding:4px 8px" onclick="deleteBannerDv('${b.id}')">Excluir</button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state" style="color:var(--red)">Erro: ${e.message}</div>`;
+  }
+}
+
+async function saveBannerDv() {
+  const btn    = document.getElementById('banner-save-btn-dv');
+  const editId = document.getElementById('banner-edit-id-dv').value;
+  const orderVal = document.getElementById('bv-order').value;
+
+  const payload = {
+    image:  pendingBannerImage,
+    link:   document.getElementById('bv-link').value.trim(),
+    active: document.getElementById('bv-active').checked,
+  };
+  if (orderVal !== '') payload.order = parseInt(orderVal, 10);
+
+  if (!payload.image) {
+    showBannerFbDv('Envie uma imagem antes de salvar.', false); return;
+  }
+
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const url    = editId ? `/api/admin/banners/${editId}` : '/api/admin/banners';
+    const method = editId ? 'PUT' : 'POST';
+    const d = await api.call(method, url, payload);
+    if (!d?.ok) throw new Error(d?.error || 'Erro desconhecido');
+    showBannerFbDv(editId ? '✓ Banner atualizado!' : '✓ Banner adicionado!', true);
+    resetBannerFormDv();
+    await loadBanners();
+  } catch(e) {
+    showBannerFbDv(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = document.getElementById('banner-edit-id-dv').value ? 'Salvar Alterações' : 'Adicionar Banner';
+  }
+}
+
+function showBannerFbDv(msg, ok) {
+  const fb = document.getElementById('banner-feedback-dv');
+  if (!fb) return;
+  fb.textContent = msg;
+  fb.style.color = ok ? 'var(--green)' : 'var(--red)';
+  fb.style.display = 'block';
+}
+
+function resetBannerFormDv() {
+  document.getElementById('banner-edit-id-dv').value = '';
+  document.getElementById('bv-link').value = '';
+  document.getElementById('bv-order').value = '';
+  document.getElementById('bv-active').checked = true;
+  pendingBannerImage = '';
+  renderBannerImagePreview('');
+  document.getElementById('banner-form-title-dv').textContent = 'Adicionar Novo Banner';
+  document.getElementById('banner-save-btn-dv').textContent   = 'Adicionar Banner';
+  document.getElementById('banner-cancel-btn-dv').style.display = 'none';
+  const fb = document.getElementById('banner-feedback-dv'); if (fb) fb.style.display = 'none';
+}
+
+function editBannerDv(id) {
+  const all = window._dvBanners || [];
+  const b   = all.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('banner-edit-id-dv').value = b.id;
+  document.getElementById('bv-link').value   = b.link || '';
+  document.getElementById('bv-order').value  = b.order ?? '';
+  document.getElementById('bv-active').checked = !!b.active;
+  pendingBannerImage = b.image || '';
+  renderBannerImagePreview(pendingBannerImage);
+  document.getElementById('banner-form-title-dv').textContent   = 'Editar Banner';
+  document.getElementById('banner-save-btn-dv').textContent     = 'Salvar Alterações';
+  document.getElementById('banner-cancel-btn-dv').style.display = '';
+  document.getElementById('page-banners').scrollIntoView({ behavior:'smooth' });
+}
+
+async function toggleBannerDv(id, active) {
+  try {
+    const d = await api.put(`/api/admin/banners/${id}`, { active });
+    if (!d?.ok) throw new Error(d?.error);
+    await loadBanners();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function moveBannerDv(id, direction) {
+  try {
+    const d = await api.post(`/api/admin/banners/${id}/move`, { direction });
+    if (!d?.ok) throw new Error(d?.error);
+    await loadBanners();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function deleteBannerDv(id) {
+  if (!confirm('Excluir este banner permanentemente?')) return;
+  try {
+    const d = await api.del(`/api/admin/banners/${id}`);
+    if (!d?.ok) throw new Error(d?.error);
+    await loadBanners();
   } catch(e) { alert('Erro: ' + e.message); }
 }
 

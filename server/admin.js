@@ -1611,6 +1611,55 @@ router.get('/coupons/:id/stats', adminAuth, (req, res) => {
   }
 });
 
+// ─── BANNER MANAGEMENT (carrossel da home) ────────────────────────────────────
+const { loadBanners, createBanner, updateBanner, deleteBanner, moveBanner } = require('./banners');
+
+router.get('/banners', adminAuth, (req, res) => {
+  try {
+    const banners = loadBanners().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    res.json({ ok: true, banners });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/banners', adminAuth, (req, res) => {
+  try {
+    const banner = createBanner(req.body || {});
+    res.json({ ok: true, banner });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.put('/banners/:id', adminAuth, (req, res) => {
+  try {
+    const banner = updateBanner(req.params.id, req.body || {});
+    res.json({ ok: true, banner });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.delete('/banners/:id', adminAuth, (req, res) => {
+  try {
+    const removed = deleteBanner(req.params.id);
+    res.json({ ok: true, removed });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/banners/:id/move', adminAuth, (req, res) => {
+  try {
+    const direction = Number(req.body?.direction) < 0 ? -1 : 1;
+    const banners = moveBanner(req.params.id, direction);
+    res.json({ ok: true, banners });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.loadConfig = loadConfig;
 module.exports.loadSecurity = loadSecurity;

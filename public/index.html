@@ -306,17 +306,79 @@ header {
   line-height: 1.2;
 }
 
-/* ===== HERO BANNER ===== */
-.hero-banner {
-  display: block;
+/* ===== HERO BANNER (carrossel) ===== */
+.banner-carousel {
+  position: relative;
   width: 100%;
-  line-height: 0;
+  aspect-ratio: 1920 / 600;
+  overflow: hidden;
+  background: var(--rose-light);
 }
-.hero-banner img {
+.banner-carousel__slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .6s ease;
+}
+.banner-carousel__slide.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.banner-carousel__slide img {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: cover;
+  object-position: center;
+}
+.banner-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.85);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  transition: background .2s, transform .15s;
+}
+.banner-carousel__arrow:hover { background: #fff; transform: translateY(-50%) scale(1.06); }
+.banner-carousel__arrow.prev { left: 14px; }
+.banner-carousel__arrow.next { right: 14px; }
+.banner-carousel__dots {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+.banner-carousel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,.6);
+  cursor: pointer;
+  padding: 0;
+  transition: background .2s, transform .15s;
+}
+.banner-carousel__dot.active {
+  background: #fff;
+  transform: scale(1.25);
+}
+@media (max-width: 640px) {
+  .banner-carousel { aspect-ratio: 1080 / 1080; }
+  .banner-carousel__arrow { width: 32px; height: 32px; }
 }
 
 /* ===== MAIN CONTENT ===== */
@@ -926,8 +988,6 @@ header {
   .search-wrapper { order: 3; flex: 0 0 100%; max-width: 100%; }
   .header-btn strong { display: none; }
   .header-btn .hb-icon { font-size: 20px; }
-
-  .hero-banner img { max-height: 80vh; object-position: top; }
 
   .products { grid-template-columns: 1fr; }
   .olx-adcard { --card-media-size: 140px; }
@@ -1560,10 +1620,8 @@ header {
   </div>
 </div>
 
-<!-- HERO BANNER -->
-<div class="hero-banner">
-  <img src="/assets/categories/hero-banner.jpg" alt="Damas Secreta — Realce sua beleza com elegância">
-</div>
+<!-- HERO BANNER (carrossel) -->
+<div class="banner-carousel" id="banner-carousel"></div>
 
 <!-- CONTEÚDO PRINCIPAL -->
 <div class="main-content">
@@ -1682,6 +1740,7 @@ header {
 <script src="compare.js"></script>
 <script src="js/loja-oficial.js"></script>
 <script src="app.js"></script>
+<script src="/js/banner-carousel.js"></script>
 
 <script src="/pages/index-1.js"></script>
 
