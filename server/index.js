@@ -375,6 +375,20 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Versão "silenciosa" de requireAdmin — não bloqueia a request, só diz se quem pediu é admin.
+// Usada para decidir se produtos arquivados devem aparecer numa resposta pública (loja) ou não (painel admin).
+const isAdminRequest = (req) => {
+  const adminToken = req.headers['x-admin-token'] || req.query.adminToken;
+  if (adminToken) return !!(process.env.ADMIN_TOKEN && adminToken === process.env.ADMIN_TOKEN);
+  const userToken = req.headers['x-auth-token'] || req.query.token;
+  if (!userToken) return false;
+  try {
+    const users = loadUsers();
+    const user = users[findUserIdxByToken(users, userToken)];
+    return !!(user && ['admin', 'superadmin'].includes(user.role));
+  } catch { return false; }
+};
+
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 
@@ -386,13 +400,16 @@ app.use('/api/admin', adminRouter);
 // Devops panel route
 app.get('/devops', (req, res) => res.sendFile(path.join(publicPath, 'devops', 'index.html')));
 
+// Painel administrativo simplificado de produtos (estilo Mercado Livre) — mesma autenticação do /devops
+app.get('/admin/produtos', (req, res) => res.sendFile(path.join(publicPath, 'admin-produtos.html')));
+
 // Maintenance mode middleware
 app.use((req, res, next) => {
   try {
     const cfg = loadConfig();
     if (!cfg.maintenance) return next();
     // Allow admin panel, admin API, and devops
-    if (req.path.startsWith('/api/admin') || req.path.startsWith('/devops')) return next();
+    if (req.path.startsWith('/api/admin') || req.path.startsWith('/devops') || req.path.startsWith('/admin/produtos')) return next();
     // Webhook do Mercado Pago precisa continuar recebendo notificações mesmo em manutenção
     if (req.path.startsWith('/api/webhooks/mercado-pago')) return next();
     // Allow valid admin tokens
@@ -540,6 +557,9 @@ const LINGERIE_CATEGORIES = [
 ];
 
 const detectCategory = (product) => {
+  // Categoria escolhida manualmente pelo admin (painel /admin/produtos) sempre tem prioridade
+  // sobre a detecção automática por palavras-chave no nome.
+  if (product.category && LINGERIE_CATEGORIES.some(c => c.key === product.category)) return product.category;
   const name = (product.name || '').toLowerCase();
   for (const cat of LINGERIE_CATEGORIES) {
     if (cat.keywords.some(kw => name.includes(kw))) return cat.key;
@@ -569,7 +589,9 @@ app.get('/api/products', (req, res) => {
   const products = loadProducts();
   const { category, model, color, minPrice, maxPrice, condition, searchQuery, name } = req.query;
   const searchText = searchQuery || name;
+  const showArchived = isAdminRequest(req);
   const filtered = products.filter((product) => {
+    if (!showArchived && product.archived) return false;
     const normalizedName = product.name ? product.name.toLowerCase() : '';
     const matchCategory = category
       ? category === 'promo'
@@ -584,13 +606,17 @@ app.get('/api/products', (req, res) => {
     const matchSearch = searchText ? normalizedName.includes(searchText.toLowerCase()) : true;
     return matchCategory && matchModel && matchColor && matchCondition && matchMin && matchMax && matchSearch;
   });
-  res.json(filtered);
+  // Anexa a categoria já calculada (detectada por palavra-chave ou definida manualmente) em cada
+  // item — evita que o painel /admin/produtos precise duplicar essa lógica no cliente.
+  res.json(filtered.map(p => ({ ...p, category: detectCategory(p) })));
 });
 
 app.get('/api/products/categories', (req, res) => {
   const products = loadProducts();
+  const showArchived = isAdminRequest(req);
   const counts = {};
   products.forEach(p => {
+    if (!showArchived && p.archived) return;
     const cat = detectCategory(p);
     counts[cat] = (counts[cat] || 0) + 1;
   });
@@ -599,6 +625,12 @@ app.get('/api/products/categories', (req, res) => {
     .map(c => ({ key: c.key, label: c.label, count: counts[c.key] }));
   if (counts['outros']) result.push({ key: 'outros', label: 'Outros', count: counts['outros'] });
   res.json(result);
+});
+
+// Lista fixa de categorias (independente de já existir produto nelas) — usada pelo seletor
+// de categoria do painel /admin/produtos, para poder cadastrar o 1º produto de uma categoria nova.
+app.get('/api/admin/categories', requireAdmin, (req, res) => {
+  res.json(LINGERIE_CATEGORIES.map(c => ({ key: c.key, label: c.label })).concat([{ key: 'outros', label: 'Outros' }]));
 });
 
 app.get('/api/products/:id', (req, res) => {
@@ -620,16 +652,17 @@ const _catalogCache = {};
 app.get('/api/catalog/product/:id', (req, res) => {
   const id = String(req.params.id);
   const products = loadProducts();
+  const showArchived = isAdminRequest(req);
   const product = products.find(p => String(p.id) === id);
-  if (!product || !(product.price > 0)) {
+  if (!product || !(product.price > 0) || (product.archived && !showArchived)) {
     return res.status(404).json({ error: 'Produto não encontrado', id });
   }
   // Irmãos = mesmo modelo (para variações de cor/armazenamento)
   const siblings = product.model
-    ? products.filter(p => p.model === product.model && p.price > 0)
+    ? products.filter(p => p.model === product.model && p.price > 0 && !p.archived)
     : [product];
   // Relacionados = 8 outros produtos (sem o atual)
-  const related = products.filter(p => String(p.id) !== id && p.price > 0).slice(0, 8)
+  const related = products.filter(p => String(p.id) !== id && p.price > 0 && !p.archived).slice(0, 8)
     .map(({ id, name, model, price, priceOriginal, rating, images }) =>
       ({ id, name, model, price, priceOriginal, rating, images: (images || []).slice(0, 1) }));
   res.json({ product, catalogKey: 'loja', siblings, related });
@@ -637,7 +670,7 @@ app.get('/api/catalog/product/:id', (req, res) => {
 
 // ==================== ADMIN CATALOG ENDPOINTS ====================
 
-const CATALOG_EDIT_FIELDS = ['name','model','price','priceOriginal','condition','color','storage','stock','description','images','specs','isPromo','promoPercent','promoBadge','seller','rating','mlUrl','archived','isNew'];
+const CATALOG_EDIT_FIELDS = ['name','model','price','priceOriginal','condition','color','storage','stock','description','images','specs','isPromo','promoPercent','promoBadge','seller','rating','mlUrl','archived','isNew','category'];
 
 app.patch('/api/admin/catalog/:catalogKey/:productId', requireAdmin, (req, res) => {
   const { catalogKey, productId } = req.params;

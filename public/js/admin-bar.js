@@ -117,6 +117,7 @@
     <span class="ab-spacer"></span>
     <button class="ab-edit-btn" id="ab-edit-btn" title="Ativar modo de edição inline nos produtos">✏ Modo Edição</button>
     <button class="ab-new-btn" id="ab-new-btn" title="Criar novo produto no catálogo">+ Novo Produto</button>
+    <a href="/admin/produtos" class="ab-btn ab-devops-btn" title="Painel de Produtos">📦 Produtos</a>
     <a href="/devops" target="_blank" class="ab-btn ab-devops-btn" title="Painel DevOps">DevOps ↗</a>
     <button class="ab-logout-btn" id="ab-logout-btn">Sair</button>
   `;
