@@ -49,7 +49,7 @@
     if (addr.rua) parts.push(addr.rua + (addr.numero ? ', ' + addr.numero : ''));
     if (addr.bairro) parts.push(addr.bairro);
     if (addr.cidade) parts.push(addr.cidade + (addr.estado ? '/' + addr.estado : ''));
-    return parts.length ? 'Enviar para ' + parts.join(' - ') : 'Envio para todo o Brasil';
+    return parts.length ? parts.join(' - ') : 'Envio para todo o Brasil';
   }
 
   function loadSaved() {
