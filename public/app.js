@@ -41,6 +41,8 @@ const CATALOGS = {
   pijamas:      '/api/products?category=pijamas',
   'moda-praia': '/api/products?category=moda-praia',
   camisolas:    '/api/products?category=camisolas',
+  sexshop:      '/api/products?category=sexshop',
+  perfumaria:   '/api/products?category=perfumaria',
   outros:       '/api/products?category=outros',
 };
 
@@ -54,6 +56,8 @@ const CATALOG_LABELS = {
   pijamas:      'Pijamas',
   'moda-praia': 'Moda Praia',
   camisolas:    'Camisolas',
+  sexshop:      'Sexshop',
+  perfumaria:   'Perfumaria',
   outros:       'Outros',
 };
 
@@ -751,7 +755,7 @@ const initCategories = async () => {
 };
 
 const preloadAllCatalogs = () => {
-  const order = ['lingeries', 'bodies', 'sutias', 'calcinhas', 'camisolas', 'moda-praia', 'outros'];
+  const order = ['lingeries', 'bodies', 'sutias', 'calcinhas', 'camisolas', 'moda-praia', 'sexshop', 'perfumaria', 'outros'];
   const pending = order.filter(k => !catalogCache[k] && CATALOGS[k]);
   let i = 0;
   const loadNext = () => {

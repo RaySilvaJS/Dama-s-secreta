@@ -535,6 +535,8 @@ const LINGERIE_CATEGORIES = [
   { key: 'conjuntos',   label: 'Conjuntos',   keywords: ['conjunto'] },
   { key: 'lingeries',   label: 'Lingeries',   keywords: ['lingerie', 'robe'] },
   { key: 'moda-praia',  label: 'Moda Praia',  keywords: ['biquíni', 'biquini', 'maio', 'moda praia'] },
+  { key: 'sexshop',     label: 'Sexshop',     keywords: ['sexshop', 'sex shop', 'vibrador', 'plug anal', 'algemas', 'chicote', 'lubrificante', 'consolo'] },
+  { key: 'perfumaria',  label: 'Perfumaria',  keywords: ['perfume', 'perfumaria', 'body splash', 'colônia', 'colonia', 'fragrância', 'fragrancia'] },
 ];
 
 const detectCategory = (product) => {
