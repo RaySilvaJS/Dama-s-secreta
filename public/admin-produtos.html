@@ -560,9 +560,18 @@ details.ap-more .ap-row2 { margin-top: 10px; }
   'use strict';
 
   // ================= AUTH GATE =================
+  // Importante: login.html tem um atalho que redireciona de volta quem já tem sessão válida
+  // (sem checar cargo). Por isso, uma conta logada sem permissão de admin NUNCA pode ser
+  // mandada para login.html — isso criaria um loop (login manda de volta pra cá, aqui manda
+  // de volta pra login...). Só vai para o login quem realmente não tem sessão nenhuma.
   var session = window.Auth ? window.Auth.getSession() : null;
-  if (!session || !session.token || !['admin', 'superadmin'].includes(session.role)) {
+  if (!session || !session.token) {
     window.location.href = '/login.html?redirect=' + encodeURIComponent('/admin/produtos');
+    return;
+  }
+  if (!['admin', 'superadmin'].includes(session.role)) {
+    alert('Sua conta não tem permissão para acessar esta área.');
+    window.location.href = '/index.html';
     return;
   }
   var TOKEN = session.token;
