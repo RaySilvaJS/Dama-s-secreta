@@ -742,6 +742,16 @@ header {
 }
 .font-bold { font-weight: 700; color: var(--text); }
 
+/* CORES DO CARD (variações) */
+.olx-adcard__colors { display: flex; align-items: center; gap: 6px; margin: 2px 0 2px; }
+.olx-adcard__color-dot {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; flex-shrink: 0;
+  transition: box-shadow .15s, transform .1s;
+}
+.olx-adcard__color-dot:hover { transform: scale(1.15); }
+.olx-adcard__color-dot.active { box-shadow: 0 0 0 2px var(--rose); }
+
 /* LOCALIZAÇÃO */
 .olx-adcard__location-date {
   display: flex; align-items: center; gap: 12px;

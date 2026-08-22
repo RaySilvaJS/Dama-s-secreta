@@ -55,6 +55,7 @@ const normalizeCartProduct = (product) => {
     // Tamanho/cor escolhidos na página do produto — seguem o item até o pedido final
     tamanho: product.tamanho || null,
     cor: product.cor || null,
+    sku: product.sku || null,
   };
 };
 
@@ -79,8 +80,8 @@ class Cart {
 
   addItem(product, quantity = 1) {
     const normalized = normalizeCartProduct(product);
-    // Mesmo produto com tamanho diferente vira uma linha separada no carrinho
-    const existing = this.items.find((item) => item.id === normalized.id && item.tamanho === normalized.tamanho);
+    // Mesmo produto com tamanho e/ou cor diferente vira uma linha separada no carrinho
+    const existing = this.items.find((item) => item.id === normalized.id && item.tamanho === normalized.tamanho && item.cor === normalized.cor);
     if (existing) {
       existing.quantidade += quantity;
     } else {
@@ -107,14 +108,14 @@ class Cart {
     return this.items.length;
   }
 
-  removeItem(productId, tamanho = null) {
-    this.items = this.items.filter((item) => !(item.id === productId && item.tamanho === tamanho));
+  removeItem(productId, tamanho = null, cor = null) {
+    this.items = this.items.filter((item) => !(item.id === productId && item.tamanho === tamanho && item.cor === cor));
     this.saveCart();
     this.updateUI();
   }
 
-  updateQuantity(productId, quantity, tamanho = null) {
-    const item = this.items.find((item) => item.id === productId && item.tamanho === tamanho);
+  updateQuantity(productId, quantity, tamanho = null, cor = null) {
+    const item = this.items.find((item) => item.id === productId && item.tamanho === tamanho && item.cor === cor);
     if (item) {
       item.quantidade = Math.max(1, quantity);
       this.saveCart();
@@ -186,25 +187,27 @@ function renderCartDrawer() {
       : formatCurrency(item.preco);
     const subtotal = item.preco * item.quantidade;
     const tamanhoArg = item.tamanho ? `'${item.tamanho}'` : 'null';
+    const corArg = item.cor ? `'${item.cor}'` : 'null';
     return `
     <div class="cart-item">
       <img src="${item.imagem}" alt="${item.nome}" />
       <div class="item-info">
         <h4>${item.nome}</h4>
+        ${item.cor ? `<p style="color:#6B7280;font-size:11px;">Cor: <strong>${item.cor}</strong></p>` : ''}
         ${item.tamanho ? `<p style="color:#6B7280;font-size:11px;">Tamanho: <strong>${item.tamanho}</strong></p>` : ''}
         ${Number(item.descontoHoje || 0) > 0 ? `<p style="color:#856404;font-size:10px;font-weight:700;background:#FFF3CD;padding:1px 5px;border-radius:3px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${item.descontoHoje}% OFF</p>` : ''}
         ${item.brinde && Number(item.descontoHoje || 0) > 0 ? `<p style="color:#16A34A;font-size:11px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg> ${item.brinde}</p>` : ''}
         ${item.retiradaDisponivel ? `<p style="color:#065F46;font-size:11px;display:inline-flex;align-items:center;gap:3px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Retirada disponível</p>` : ''}
         <p>${precoUn}</p>
         <div class="quantity-control">
-          <button onclick="cart.updateQuantity('${item.id}', ${item.quantidade - 1}, ${tamanhoArg})">−</button>
+          <button onclick="cart.updateQuantity('${item.id}', ${item.quantidade - 1}, ${tamanhoArg}, ${corArg})">−</button>
           <span>${item.quantidade}</span>
-          <button onclick="cart.updateQuantity('${item.id}', ${item.quantidade + 1}, ${tamanhoArg})">+</button>
+          <button onclick="cart.updateQuantity('${item.id}', ${item.quantidade + 1}, ${tamanhoArg}, ${corArg})">+</button>
         </div>
       </div>
       <div class="item-price">
         <p>${formatCurrency(subtotal)}</p>
-        <button onclick="cart.removeItem('${item.id}', ${tamanhoArg})" class="btn-remove" aria-label="Remover"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button onclick="cart.removeItem('${item.id}', ${tamanhoArg}, ${corArg})" class="btn-remove" aria-label="Remover"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
   `;

@@ -347,7 +347,15 @@ const getTimeAgo = () => {
 // renderProducts faz N/5 parses de HTML em vez de N parses individuais
 const _buildProductCardHTML = (product) => {
   const productUrl = buildProductUrl(product.id);
-  const mainImage = getFirstValidImage(product);
+  // Variações de cor cadastradas no produto — se tiver 2+, o card abre já na cor padrão
+  // e mostra bolinhas pra trocar a foto sem precisar entrar no produto.
+  const cardColorVariants = Array.isArray(product.colorVariants)
+    ? product.colorVariants.filter(v => v && v.name && v.name.trim() && Array.isArray(v.images) && v.images[0])
+    : [];
+  const defaultVariantIdx = Math.max(0, cardColorVariants.findIndex(v => v.name === product.defaultColor));
+  const mainImage = cardColorVariants.length >= 2
+    ? cardColorVariants[defaultVariantIdx].images[0]
+    : getFirstValidImage(product);
   const seller = (product.seller || '').replace(/Ir para Loja Oficial/gi, '').trim() || "DAMA'S SECRETA";
   const isFav = _getFavs().includes(String(product.id));
   const extras = getOrCreateCardExtras(product.id);
@@ -396,6 +404,12 @@ const _buildProductCardHTML = (product) => {
 
       <h3 class="olx-adcard__price">${formatCurrency(precoFinal)}</h3>
       <div class="olx-adcard__price-info">${getInstallmentInfo(precoFinal)}</div>
+
+      ${cardColorVariants.length >= 2 ? `<div class="olx-adcard__colors" onclick="event.preventDefault();event.stopPropagation();">
+        ${cardColorVariants.map((v, i) => `<button type="button" class="olx-adcard__color-dot${i === defaultVariantIdx ? ' active' : ''}"
+          style="background:${v.hex || '#E8518A'};" title="${v.name}"
+          onclick="event.preventDefault();event.stopPropagation();switchCardColor(this,'${v.images[0].replace(/'/g, "\\'")}')"></button>`).join('')}
+      </div>` : ''}
 
       <div class="entrega-full-wrap">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
@@ -661,6 +675,17 @@ function toggleFavorite(productId, btn) {
   _favsCache = favorites; // atualiza cache em memória
   try { localStorage.setItem("favorites", JSON.stringify(favorites)); } catch(e) {}
 }
+
+// Troca só a foto exibida no card (bolinhas de cor da listagem) — não navega pro produto.
+function switchCardColor(dotBtn, imageUrl) {
+  const card = dotBtn.closest('.olx-adcard');
+  if (!card) return;
+  const img = card.querySelector('.olx-adcard__media-link img');
+  if (img) img.src = imageUrl;
+  card.querySelectorAll('.olx-adcard__color-dot').forEach(d => d.classList.remove('active'));
+  dotBtn.classList.add('active');
+}
+window.switchCardColor = switchCardColor;
 
 function addToRecent(productId) {
   let recent = JSON.parse(localStorage.getItem("recent-products") || "[]");

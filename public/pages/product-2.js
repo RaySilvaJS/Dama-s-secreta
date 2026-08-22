@@ -136,8 +136,14 @@
       }
       // Só aplica a variação escolhida ao produto da própria página (não afeta cards de listagem)
       if (String(product.id) === String(_currentProductId)) {
+        if (_selectedVariant.cor && Number(_selectedVariant.stock) <= 0) {
+          if (window.showCartToast) window.showCartToast('Esta cor está esgotada no momento.', 'error');
+          return;
+        }
         product.tamanho = _selectedVariant.tamanho || null;
         product.cor = _selectedVariant.cor || null;
+        product.sku = _selectedVariant.sku || null;
+        if (_selectedVariant.imagem) product.images = [_selectedVariant.imagem];
       }
       if (window.cart) window.cart.addItem(product, 1);
       if (window.MetaPixel) window.MetaPixel.addToCart({ id: product.id, name: product.nome, value: product.preco });
@@ -635,6 +641,8 @@
             <p class="shipping-calc">${IC.truck} Calcule o frete na finalização da compra</p>
           </div>
 
+          <div class="card" id="color-variants-card" style="display:none;"></div>
+
           <div class="card" id="variations-card">
             <div class="ml-var-rating">
               ${starsHtml(product.rating||5, '.8rem')} ${(product.rating||5).toFixed(1)}
@@ -742,6 +750,7 @@
 
     setupGallery(images);
     loadMLVariations(product);
+    setupColorVariants(product, extras);
     setupSpecsToggle(specEntries.length);
     setupDescToggle();
     setupLazyReviews(reviewsList);
@@ -767,6 +776,94 @@
       skeleton.remove();
       requestAnimationFrame(() => content.classList.add('sk-visible'));
     }, 220);
+  };
+
+  // Variações de cor cadastradas no próprio produto (não são produtos separados) — só
+  // aparece quando o admin cadastrou 2 ou mais cores; com 0 ou 1, some por completo e o
+  // produto se comporta exatamente como um produto sem variação.
+  const setupColorVariants = (product, extras) => {
+    const card = document.getElementById('color-variants-card');
+    if (!card) return;
+
+    const variants = Array.isArray(product.colorVariants)
+      ? product.colorVariants.filter(v => v && v.name && v.name.trim())
+      : [];
+
+    if (variants.length < 2) { card.style.display = 'none'; return; }
+
+    // Evita duplicar a informação de cor com o bloco antigo (Cor: X em texto simples)
+    const oldCard = document.getElementById('variations-card');
+    if (oldCard) {
+      oldCard.querySelectorAll('.ml-var-line').forEach(line => {
+        if (line.textContent.trim().indexOf('Cor:') === 0) line.remove();
+      });
+    }
+
+    let selectedIdx = variants.findIndex(v => v.name === product.defaultColor);
+    if (selectedIdx < 0) selectedIdx = 0;
+
+    const applyStockAndActions = (v) => {
+      const stock = Number(v.stock) || 0;
+      const stockEl = document.getElementById('stock-display');
+      if (stockEl) {
+        stockEl.innerHTML = `<div class="stock-row">
+          ${stock <= 0
+            ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Cor esgotada</span>`
+            : stock <= 5
+              ? `<span class="stock-dot low"></span><span style="color:var(--red);font-weight:600;">Últimas ${stock} unidade${stock > 1 ? 's' : ''} desta cor!</span>`
+              : `<span class="stock-dot ok"></span><span style="color:var(--green);">Em estoque — ${stock} disponíve${stock > 1 ? 'is' : 'l'} nesta cor</span>`}
+        </div>`;
+      }
+      document.querySelectorAll('[onclick*="buyNow("], [onclick*="addToCart("]').forEach(btn => {
+        btn.disabled = stock <= 0;
+        btn.style.opacity = stock <= 0 ? '.5' : '';
+        btn.style.cursor = stock <= 0 ? 'not-allowed' : '';
+      });
+    };
+
+    const applySelection = () => {
+      const v = variants[selectedIdx];
+      _selectedVariant.cor = v.name;
+      _selectedVariant.sku = v.sku || null;
+      _selectedVariant.imagem = (Array.isArray(v.images) && v.images[0]) || null;
+      _selectedVariant.stock = Number(v.stock) || 0;
+      if (window._galleryUpdate && Array.isArray(v.images) && v.images.length) {
+        window._galleryUpdate(v.images);
+      }
+      applyStockAndActions(v);
+    };
+
+    const render = () => {
+      const chips = variants.map((v, i) => {
+        const active = i === selectedIdx;
+        const out = (Number(v.stock) || 0) <= 0;
+        const dot = v.hex ? v.hex : '#E8518A';
+        return `<button type="button" class="cv-swatch-btn${active ? ' active' : ''}${out ? ' out' : ''}"
+          data-cv-select="${i}" title="${v.name}${out ? ' — Esgotado' : ''}">
+          <span class="cv-dot" style="background:${dot};"></span>
+          <span class="cv-name">${v.name}</span>
+          ${out ? '<span class="cv-out-badge">Esgotado</span>' : ''}
+        </button>`;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="ml-var-line"><span class="ml-var-label">Escolha a cor:</span> <strong>${variants[selectedIdx].name}</strong></div>
+        <div class="cv-swatch-row">${chips}</div>`;
+      card.style.display = '';
+
+      card.querySelectorAll('[data-cv-select]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = +btn.getAttribute('data-cv-select');
+          if (i === selectedIdx) return;
+          selectedIdx = i;
+          applySelection();
+          render();
+        });
+      });
+    };
+
+    applySelection();
+    render();
   };
 
   const loadMLVariations = (product) => {

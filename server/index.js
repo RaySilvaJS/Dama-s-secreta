@@ -719,7 +719,7 @@ app.get('/api/catalog/product/:id', (req, res) => {
 
 // ==================== ADMIN CATALOG ENDPOINTS ====================
 
-const CATALOG_EDIT_FIELDS = ['name','model','price','priceOriginal','condition','color','storage','stock','description','images','specs','isPromo','promoPercent','promoBadge','seller','rating','mlUrl','archived','isNew','category'];
+const CATALOG_EDIT_FIELDS = ['name','model','price','priceOriginal','condition','color','storage','stock','description','images','specs','isPromo','promoPercent','promoBadge','seller','rating','mlUrl','archived','isNew','category','colorVariants','defaultColor'];
 
 app.patch('/api/admin/catalog/:catalogKey/:productId', requireAdmin, (req, res) => {
   const { catalogKey, productId } = req.params;

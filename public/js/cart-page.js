@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <img src="${item.imagem}" alt="${item.nome}" />
         <div class="item-details">
           <h2>${item.nome}</h2>
+          ${item.cor ? `<p style="color:#6B7280;font-size:12px;">Cor: <strong>${item.cor}</strong></p>` : ''}
           ${item.tamanho ? `<p style="color:#6B7280;font-size:12px;">Tamanho: <strong>${item.tamanho}</strong></p>` : ''}
           ${Number(item.descontoHoje || 0) > 0 ? `<p style="background:#FFF3CD;color:#92400E;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px;margin-bottom:4px"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${item.descontoHoje}% OFF hoje</p>` : ''}
           <p>Preço un: ${precoUnitDisplay}</p>
@@ -66,13 +67,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!current) return;
 
         if (action === 'decrease') {
-          cart.updateQuantity(current.id, current.quantidade - 1, current.tamanho);
+          cart.updateQuantity(current.id, current.quantidade - 1, current.tamanho, current.cor);
         }
         if (action === 'increase') {
-          cart.updateQuantity(current.id, current.quantidade + 1, current.tamanho);
+          cart.updateQuantity(current.id, current.quantidade + 1, current.tamanho, current.cor);
         }
         if (action === 'remove') {
-          cart.removeItem(current.id, current.tamanho);
+          cart.removeItem(current.id, current.tamanho, current.cor);
         }
         render();
       });

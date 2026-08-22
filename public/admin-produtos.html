@@ -274,6 +274,44 @@ details.ap-more .ap-row2 { margin-top: 10px; }
 .ap-img-error { font-size: 12px; color: var(--red); margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ap-img-error button { background: var(--red-bg); color: var(--red); border: none; border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; }
 
+/* ===== COLOR VARIANTS ===== */
+.ap-cv-card {
+  border: 1.5px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff;
+}
+.ap-cv-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ap-cv-default { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text-2); cursor: pointer; }
+.ap-cv-default input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+.ap-cv-default.is-default { color: var(--gold-dark); }
+.ap-cv-swatch { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border); flex-shrink: 0; }
+.ap-cv-spacer { flex: 1; }
+.ap-cv-reorder { display: flex; gap: 3px; }
+.ap-cv-reorder button, .ap-cv-remove {
+  border: 1px solid var(--border); background: #fff; border-radius: 7px; width: 28px; height: 28px;
+  font-size: 12px; cursor: pointer; color: var(--text-2); flex-shrink: 0;
+}
+.ap-cv-reorder button:disabled { opacity: .3; cursor: default; }
+.ap-cv-remove { color: var(--red); border-color: #FCA5A5; }
+.ap-cv-card input[type="color"] { padding: 3px; height: 40px; cursor: pointer; }
+.ap-cv-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.ap-cv-photo-item { position: relative; width: 64px; }
+.ap-cv-photo-item .thumb {
+  width: 64px; height: 64px; border-radius: 8px; overflow: hidden; background: #F1F5F9; border: 2px solid var(--border);
+}
+.ap-cv-photo-item.main .thumb { border-color: var(--gold); }
+.ap-cv-photo-item .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ap-cv-photo-item .star { position: absolute; top: -5px; left: -5px; background: var(--gold); color: #fff; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 4px; }
+.ap-cv-photo-item .rm {
+  position: absolute; top: -5px; right: -5px; background: var(--red); color: #fff; border: 2px solid #fff;
+  width: 17px; height: 17px; border-radius: 50%; font-size: 10px; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.ap-cv-add-photo {
+  width: 64px; height: 64px; border-radius: 8px; border: 2px dashed var(--border); background: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--muted); cursor: pointer; flex-shrink: 0;
+}
+.ap-cv-add-photo:hover { border-color: var(--rose); color: var(--rose-dark); }
+.ap-cv-progress { font-size: 11px; color: var(--text-2); min-height: 15px; margin-bottom: 6px; }
+
 /* ===== FORM FOOTER ===== */
 .ap-form-footer {
   position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--border);
@@ -447,9 +485,26 @@ details.ap-more .ap-row2 { margin-top: 10px; }
         </div>
       </div>
 
+      <!-- VARIAÇÕES DE COR -->
+      <div class="ap-section">
+        <h2><span class="n">3</span>Variações de cor</h2>
+        <div class="ap-status-toggle" style="margin-bottom:12px;">
+          <div class="lbl">Este produto tem variações de cor?<small>Ative se ele vem em mais de uma cor (ex: Rosa, Preto, Azul)</small></div>
+          <label class="ap-switch">
+            <input type="checkbox" id="ap-f-has-colors">
+            <span class="track"></span><span class="thumb"></span>
+          </label>
+        </div>
+        <div id="ap-cv-body" style="display:none;">
+          <div id="ap-cv-list"></div>
+          <button type="button" class="ap-btn-outline" id="ap-cv-add-btn" style="width:100%;margin-top:4px;">+ Adicionar cor</button>
+          <div class="hint" style="margin-top:8px;">A primeira foto de cada cor é a principal dela. Marque uma cor como "Padrão" — é a que abre primeiro quando a cliente entra na página do produto.</div>
+        </div>
+      </div>
+
       <!-- PREÇO E ESTOQUE -->
       <div class="ap-section">
-        <h2><span class="n">3</span>Preço e estoque</h2>
+        <h2><span class="n">4</span>Preço e estoque</h2>
 
         <div class="ap-row2">
           <div class="ap-field">
@@ -617,6 +672,8 @@ details.ap-more .ap-row2 { margin-top: 10px; }
   var visibleCount = PAGE_SIZE;
   var editingProduct = null; // null = criando novo
   var formImages = [];
+  var colorVariantsState = []; // [{name,hex,images,stock,sku}]
+  var defaultColorState = '';
   var searchDebounce = null;
 
   var els = {
@@ -905,6 +962,17 @@ details.ap-more .ap-row2 { margin-top: 10px; }
     setVal('ap-f-badge', product ? product.promoBadge : '');
     setVal('ap-f-mlurl', product ? product.mlUrl : '');
 
+    colorVariantsState = (product && Array.isArray(product.colorVariants))
+      ? product.colorVariants.map(function (v) {
+          return { name: v.name || '', hex: v.hex || '', images: Array.isArray(v.images) ? v.images.slice() : [], stock: v.stock ?? 0, sku: v.sku || '' };
+        })
+      : [];
+    defaultColorState = (product && product.defaultColor) || (colorVariantsState[0] ? colorVariantsState[0].name : '');
+    var hasColorsEl = document.getElementById('ap-f-has-colors');
+    hasColorsEl.checked = colorVariantsState.length > 0;
+    toggleColorVariantsBody();
+    renderColorVariants();
+
     document.querySelector('#view-form details.ap-more').open = false;
     clearImageErrors();
     renderImages();
@@ -935,6 +1003,159 @@ details.ap-more .ap-row2 { margin-top: 10px; }
   document.getElementById('ap-success-list-btn').addEventListener('click', showList);
   document.getElementById('ap-success-new-btn').addEventListener('click', function () { openForm(null); });
   document.getElementById('ap-delete-btn').addEventListener('click', function () { if (editingProduct) openDeleteModal(editingProduct); });
+
+  // ================= VARIAÇÕES DE COR =================
+  var cvList = document.getElementById('ap-cv-list');
+  var cvHasColorsEl = document.getElementById('ap-f-has-colors');
+  var cvUploadTargetIndex = -1;
+  var cvFileInput = document.createElement('input');
+  cvFileInput.type = 'file';
+  cvFileInput.accept = 'image/*';
+  cvFileInput.multiple = true;
+  cvFileInput.style.display = 'none';
+  document.body.appendChild(cvFileInput);
+
+  function toggleColorVariantsBody() {
+    document.getElementById('ap-cv-body').style.display = cvHasColorsEl.checked ? 'block' : 'none';
+    if (cvHasColorsEl.checked && colorVariantsState.length === 0) addColorVariant();
+  }
+  cvHasColorsEl.addEventListener('change', toggleColorVariantsBody);
+
+  function addColorVariant() {
+    colorVariantsState.push({ name: '', hex: '', images: [], stock: 0, sku: '' });
+    if (colorVariantsState.length === 1) defaultColorState = '';
+    renderColorVariants();
+  }
+  document.getElementById('ap-cv-add-btn').addEventListener('click', addColorVariant);
+
+  function removeColorVariant(i) {
+    var removed = colorVariantsState[i];
+    colorVariantsState.splice(i, 1);
+    if (removed && removed.name === defaultColorState) {
+      defaultColorState = colorVariantsState[0] ? colorVariantsState[0].name : '';
+    }
+    renderColorVariants();
+  }
+
+  function moveColorVariant(i, dir) {
+    var j = i + dir;
+    if (j < 0 || j >= colorVariantsState.length) return;
+    var tmp = colorVariantsState[i]; colorVariantsState[i] = colorVariantsState[j]; colorVariantsState[j] = tmp;
+    renderColorVariants();
+  }
+
+  function renderColorVariants() {
+    cvList.innerHTML = colorVariantsState.map(function (v, i) {
+      var isDefault = v.name && v.name === defaultColorState;
+      var photosHtml = v.images.map(function (url, pi) {
+        return '' +
+          '<div class="ap-cv-photo-item' + (pi === 0 ? ' main' : '') + '">' +
+            (pi === 0 ? '<span class="star">★</span>' : '') +
+            '<button type="button" class="rm" data-cv-photo-rm="' + i + '_' + pi + '" aria-label="Remover">✕</button>' +
+            '<div class="thumb"><img src="' + url + '" alt=""></div>' +
+          '</div>';
+      }).join('');
+      return '' +
+        '<div class="ap-cv-card" data-cv-idx="' + i + '">' +
+          '<div class="ap-cv-card-head">' +
+            (v.hex ? '<span class="ap-cv-swatch" style="background:' + v.hex + ';"></span>' : '') +
+            '<label class="ap-cv-default' + (isDefault ? ' is-default' : '') + '">' +
+              '<input type="radio" name="ap-cv-default-radio" data-cv-default="' + i + '" ' + (isDefault ? 'checked' : '') + '>' +
+              '<span>' + (isDefault ? '★ Padrão' : 'Padrão') + '</span>' +
+            '</label>' +
+            '<span class="ap-cv-spacer"></span>' +
+            '<div class="ap-cv-reorder">' +
+              '<button type="button" data-cv-up="' + i + '" ' + (i === 0 ? 'disabled' : '') + '>↑</button>' +
+              '<button type="button" data-cv-dn="' + i + '" ' + (i === colorVariantsState.length - 1 ? 'disabled' : '') + '>↓</button>' +
+            '</div>' +
+            '<button type="button" class="ap-cv-remove" data-cv-rm="' + i + '" title="Remover cor">🗑</button>' +
+          '</div>' +
+          '<div class="ap-row2">' +
+            '<div class="ap-field"><label>Nome da cor *</label><input type="text" data-cv-field="name" data-cv-idx="' + i + '" value="' + esc(v.name) + '" placeholder="Ex: Rosa"></div>' +
+            '<div class="ap-field"><label>Cor (opcional)</label><input type="color" data-cv-field="hex" data-cv-idx="' + i + '" value="' + (v.hex || '#E8518A') + '"></div>' +
+          '</div>' +
+          '<div class="ap-field">' +
+            '<label>Fotos desta cor</label>' +
+            '<div class="ap-cv-photos">' + photosHtml + '<button type="button" class="ap-cv-add-photo" data-cv-addphoto="' + i + '" title="Adicionar foto">+</button></div>' +
+            '<div class="ap-cv-progress" data-cv-progress="' + i + '"></div>' +
+          '</div>' +
+          '<div class="ap-row2">' +
+            '<div class="ap-field"><label>Estoque desta cor</label><input type="number" min="0" step="1" data-cv-field="stock" data-cv-idx="' + i + '" value="' + (v.stock ?? 0) + '"></div>' +
+            '<div class="ap-field"><label>SKU (opcional)</label><input type="text" data-cv-field="sku" data-cv-idx="' + i + '" value="' + esc(v.sku) + '" placeholder="Ex: PIJ-ROSA-M"></div>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+
+    // Campos de texto/número — só atualiza o estado, sem re-renderizar (mantém o foco)
+    cvList.querySelectorAll('[data-cv-field]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var i = +el.getAttribute('data-cv-idx');
+        var field = el.getAttribute('data-cv-field');
+        var v = colorVariantsState[i];
+        if (!v) return;
+        var wasDefault = v.name && v.name === defaultColorState;
+        v[field] = field === 'stock' ? (parseInt(el.value, 10) || 0) : el.value;
+        if (wasDefault) defaultColorState = v.name; // nome mudou — mantém essa cor como padrão
+      });
+    });
+
+    cvList.querySelectorAll('[data-cv-default]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var i = +el.getAttribute('data-cv-default');
+        defaultColorState = colorVariantsState[i] ? colorVariantsState[i].name : '';
+        renderColorVariants();
+      });
+    });
+    cvList.querySelectorAll('[data-cv-up]').forEach(function (el) { el.addEventListener('click', function () { moveColorVariant(+el.getAttribute('data-cv-up'), -1); }); });
+    cvList.querySelectorAll('[data-cv-dn]').forEach(function (el) { el.addEventListener('click', function () { moveColorVariant(+el.getAttribute('data-cv-dn'), 1); }); });
+    cvList.querySelectorAll('[data-cv-rm]').forEach(function (el) { el.addEventListener('click', function () { removeColorVariant(+el.getAttribute('data-cv-rm')); }); });
+    cvList.querySelectorAll('[data-cv-addphoto]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        cvUploadTargetIndex = +el.getAttribute('data-cv-addphoto');
+        cvFileInput.value = '';
+        cvFileInput.click();
+      });
+    });
+    cvList.querySelectorAll('[data-cv-photo-rm]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var parts = el.getAttribute('data-cv-photo-rm').split('_');
+        var vi = +parts[0], pi = +parts[1];
+        if (colorVariantsState[vi]) {
+          colorVariantsState[vi].images.splice(pi, 1);
+          renderColorVariants();
+        }
+      });
+    });
+  }
+
+  cvFileInput.addEventListener('change', function (e) {
+    var files = Array.prototype.filter.call(e.target.files, function (f) { return f.type.indexOf('image/') === 0; });
+    if (!files.length || cvUploadTargetIndex < 0) return;
+    uploadColorVariantPhotos(files, cvUploadTargetIndex, 0, files.length);
+  });
+
+  function uploadColorVariantPhotos(files, targetIndex, index, total) {
+    var progEl = cvList.querySelector('[data-cv-progress="' + targetIndex + '"]');
+    if (index >= total) {
+      if (progEl) { progEl.textContent = 'Fotos adicionadas!'; setTimeout(function () { if (progEl) progEl.textContent = ''; }, 2000); }
+      return;
+    }
+    var file = files[index];
+    if (progEl) progEl.textContent = 'Enviando fotos... ' + index + ' de ' + total;
+    if (file.size > 18 * 1024 * 1024) { uploadColorVariantPhotos(files, targetIndex, index + 1, total); return; }
+
+    compressImageFile(file).then(function (dataUrl) {
+      return api('POST', '/api/admin/upload', { dataUrl: dataUrl, filename: file.name });
+    }).then(function (r) {
+      if (r && r.success && colorVariantsState[targetIndex]) {
+        colorVariantsState[targetIndex].images.push(r.url);
+        renderColorVariants();
+      }
+      uploadColorVariantPhotos(files, targetIndex, index + 1, total);
+    }).catch(function () {
+      uploadColorVariantPhotos(files, targetIndex, index + 1, total);
+    });
+  }
 
   // ================= IMAGES: RENDER / REORDER =================
   var imgGrid = document.getElementById('ap-img-grid');
@@ -1083,6 +1304,10 @@ details.ap-more .ap-row2 { margin-top: 10px; }
     if (!price || price <= 0) return 'Informe um preço válido.';
     var stock = getVal('ap-f-qty');
     if (stock === '' || Number(stock) < 0) return 'Informe a quantidade em estoque.';
+    if (document.getElementById('ap-f-has-colors').checked) {
+      var named = colorVariantsState.filter(function (v) { return v.name.trim(); });
+      if (!named.length) return 'Adicione pelo menos uma cor, ou desative "Este produto tem variações de cor?".';
+    }
     return null;
   }
 
@@ -1094,7 +1319,15 @@ details.ap-more .ap-row2 { margin-top: 10px; }
     var promoPrice = parseFloat(getVal('ap-f-promo')) || 0;
     var hasPromo = promoPrice > 0 && promoPrice < normalPrice;
 
+    var hasColors = document.getElementById('ap-f-has-colors').checked;
+    var namedVariants = hasColors ? colorVariantsState.filter(function (v) { return v.name.trim(); }) : [];
+    var finalDefaultColor = namedVariants.some(function (v) { return v.name === defaultColorState; })
+      ? defaultColorState
+      : (namedVariants[0] ? namedVariants[0].name : '');
+
     var payload = {
+      colorVariants: namedVariants,
+      defaultColor: finalDefaultColor,
       name: getVal('ap-f-name').trim(),
       category: getVal('ap-f-category-form'),
       storage: getVal('ap-f-size').trim(),
