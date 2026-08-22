@@ -585,6 +585,35 @@ app.get('/api/site-config', (req, res) => {
   });
 });
 
+// Embaralho determinístico: mesma lista + mesma "semente" sempre produz a mesma ordem.
+// A semente é calculada a partir dos IDs do catálogo, então a ordem só muda quando o
+// catálogo muda de verdade (produto criado/editado/excluído) — não a cada request, o que
+// quebraria a paginação/scroll da vitrine. É assim que evitamos que produtos novos (sempre
+// inseridos no início do arquivo) fiquem visualmente empilhados no topo da aba "Tudo".
+const _hashSeed = (str) => {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+const _shuffleDeterministic = (arr, seed) => {
+  let s = seed | 0;
+  const rand = () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+};
+
 app.get('/api/products', (req, res) => {
   const products = loadProducts();
   const { category, model, color, minPrice, maxPrice, condition, searchQuery, name } = req.query;
@@ -608,7 +637,15 @@ app.get('/api/products', (req, res) => {
   });
   // Anexa a categoria já calculada (detectada por palavra-chave ou definida manualmente) em cada
   // item — evita que o painel /admin/produtos precise duplicar essa lógica no cliente.
-  res.json(filtered.map(p => ({ ...p, category: detectCategory(p) })));
+  const withCategory = filtered.map(p => ({ ...p, category: detectCategory(p) }));
+  // Só distribui aleatoriamente a aba "Tudo" da loja pública — o painel /admin/produtos e o
+  // DevOps continuam vendo a ordem real do catálogo (mais recentes primeiro), que é o que
+  // faz sentido para gerenciar produtos.
+  if (!category && !showArchived) {
+    const seed = _hashSeed(withCategory.map(p => p.id).join(','));
+    return res.json(_shuffleDeterministic(withCategory, seed));
+  }
+  res.json(withCategory);
 });
 
 app.get('/api/products/categories', (req, res) => {
