@@ -102,11 +102,19 @@
     });
   }
 
-  // CNPJ e Localização: campo vazio no painel = some do rodapé (não dá pra "substituir por
-  // nada" com troca de texto, por isso aqui a linha inteira é escondida via display:none).
+  // Identifica se o documento salvo é CPF (11 dígitos) ou CNPJ (14 dígitos) pra usar
+  // o rótulo certo — útil pra quem ainda não tem CNPJ e cadastrou o CPF por enquanto.
+  function docLabel(value) {
+    var digits = String(value || '').replace(/\D/g, '');
+    if (digits.length === 11) return 'CPF';
+    return 'CNPJ';
+  }
+
+  // CNPJ/CPF e Localização: campo vazio no painel = some do rodapé (não dá pra "substituir
+  // por nada" com troca de texto, por isso aqui a linha inteira é escondida via display:none).
   function applyCompanyInfo(cfg) {
     document.querySelectorAll('.footer-cnpj').forEach(function (el) {
-      if (cfg.cnpj) { el.textContent = 'CNPJ: ' + cfg.cnpj; el.style.display = ''; }
+      if (cfg.cnpj) { el.textContent = docLabel(cfg.cnpj) + ': ' + cfg.cnpj; el.style.display = ''; }
       else { el.style.display = 'none'; }
     });
     document.querySelectorAll('.footer-location').forEach(function (el) {
