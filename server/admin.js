@@ -912,7 +912,10 @@ router.post('/mercadopago-config', adminAuth, (req, res) => {
 
 router.get('/smtp-config', adminAuth, (req, res) => {
   const cfg = loadConfig();
-  const panel = cfg.smtpConfig || {};
+  const rawPanel = cfg.smtpConfig || {};
+  // Nunca devolve a senha em texto puro — só indica se está definida (mascarada).
+  // O front-end trata '********' como "sem alteração" ao salvar (ver POST abaixo).
+  const panel = { ...rawPanel, pass: rawPanel.pass ? '********' : '' };
   const env = {
     host: !!process.env.SMTP_HOST,
     port: !!process.env.SMTP_PORT,
@@ -955,12 +958,18 @@ router.post('/smtp-config', adminAuth, (req, res) => {
   } = req.body || {};
 
   const cfg = loadConfig();
+  // O campo de senha no painel vem pré-preenchido com '********' (GET /smtp-config mascara
+  // a senha real). Se o admin salvar sem mexer nesse campo, mantém a senha já salva em vez
+  // de sobrescrever com o próprio texto de máscara.
+  const incomingPass = (pass || '').trim();
+  const resolvedPass = incomingPass === '********' ? ((cfg.smtpConfig && cfg.smtpConfig.pass) || '') : incomingPass;
+
   cfg.smtpConfig = {
     host: (host || '').trim(),
     port: (port || '').toString().trim(),
     secure: String(secure || '').trim().toLowerCase(),
     user: (user || '').trim(),
-    pass: (pass || '').trim(),
+    pass: resolvedPass,
     from: (from || '').trim(),
     appUrl: (appUrl || '').trim().replace(/\/+$/, ''),
   };
