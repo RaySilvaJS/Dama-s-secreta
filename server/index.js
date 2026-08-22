@@ -707,7 +707,14 @@ app.get('/api/catalog/product/:id', (req, res) => {
   const related = products.filter(p => String(p.id) !== id && p.price > 0 && !p.archived).slice(0, 8)
     .map(({ id, name, model, price, priceOriginal, rating, images }) =>
       ({ id, name, model, price, priceOriginal, rating, images: (images || []).slice(0, 1) }));
-  res.json({ product, catalogKey: 'loja', siblings, related });
+  // Anexa a categoria — a página do produto usa isso pra decidir se mostra Cor/Tamanho
+  // (não faz sentido em Perfumaria, Sexshop etc.) sem duplicar a lógica de detecção aqui.
+  res.json({
+    product: { ...product, category: detectCategory(product) },
+    catalogKey: 'loja',
+    siblings: siblings.map(p => ({ ...p, category: detectCategory(p) })),
+    related
+  });
 });
 
 // ==================== ADMIN CATALOG ENDPOINTS ====================

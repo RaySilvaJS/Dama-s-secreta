@@ -9,6 +9,11 @@
   let _selectedVariant = { tamanho: null, cor: null };
   let _currentProductId = PRODUCT_ID;
 
+  // Categorias em que "Cor" e "Tamanho (P/M/G/GG)" fazem sentido como grade de roupa —
+  // usado pra não mostrar "Cor: Única" / grade de tamanhos falsos em Perfumaria, Sexshop etc.
+  const APPAREL_CATEGORIES = ['pijamas', 'bodies', 'sutias', 'calcinhas', 'camisolas', 'conjuntos', 'lingeries', 'moda-praia'];
+  const isApparelCategory = (category) => APPAREL_CATEGORIES.indexOf(category) !== -1;
+
   const IC = {
     shield:   `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
     check:    `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
@@ -506,21 +511,26 @@
       ? getOrCreateCardExtras(product.id)
       : { descontoHoje: 0, brinde: null, freteGratis: false, retiradaDisponivel: false, stock: Math.floor(Math.random() * 50) + 1 };
 
-    const colorValue = String(
+    // Só usa "Única"/"Único" como valor padrão em categorias de roupa (onde faz sentido
+    // dizer "esta peça só vem numa cor/tamanho"). Fora disso (Perfumaria, Sexshop, Outros),
+    // só mostra Cor/Tamanho quando o produto realmente tiver um valor cadastrado.
+    const productIsApparel = isApparelCategory(product.category);
+    const rawColor = String(
       product.color ||
       specs['Cor'] ||
       specs['Cor principal'] ||
       specs['Cor do produto'] ||
       ''
-    ).trim() || 'Unica';
-
-    const sizeValue = String(
+    ).trim();
+    const rawSize = String(
       product.size ||
       product.storage ||
       specs['Tamanho'] ||
       specs['Memória interna'] ||
       ''
-    ).trim() || 'Unico';
+    ).trim();
+    const colorValue = rawColor || (productIsApparel ? 'Unica' : '');
+    const sizeValue = rawSize || (productIsApparel ? 'Unico' : '');
 
     const hasGift = Boolean(String(extras.brinde || '').trim()) && Number(extras.descontoHoje || 0) > 0;
     const hasFreeShipping = Boolean(extras.freteGratis || product.free_shipping) && Number(extras.descontoHoje || 0) > 0;
@@ -630,11 +640,11 @@
               ${starsHtml(product.rating||5, '.8rem')} ${(product.rating||5).toFixed(1)}
               ${(product.reviews||0) > 0 ? `<span>|</span> ${(product.reviews||0).toLocaleString('pt-BR')} vendido${product.reviews === 1 ? '' : 's'}` : ''}
             </div>
-            <div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorValue}</strong></div>
-            <div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${sizeValue}</strong></div>
-            <div class="ml-var-chips">
+            ${colorValue ? `<div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorValue}</strong></div>` : ''}
+            ${sizeValue ? `<div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${sizeValue}</strong></div>` : ''}
+            ${productIsApparel && sizeValue ? `<div class="ml-var-chips">
               <button class="variation-chip-sm active">${sizeValue}</button>
-            </div>
+            </div>` : ''}
           </div>
 
           <div class="card" id="stock-display" style="padding:14px 18px;">
@@ -787,31 +797,46 @@
     const siblings = _catalog.filter(p => p.model && p.model === product.model);
 
     if (siblings.length <= 1) {
-      // Grade de tamanhos fixa, exibida em todo produto independente dos dados do catálogo
-      const STANDARD_SIZES = ['P', 'M', 'G', 'GG'];
-      const colorLabel = resolveColor(product) || 'Unica';
-      const sizeOptions = STANDARD_SIZES;
-      let selectedSize = sizeOptions[0];
-      _selectedVariant = { tamanho: selectedSize, cor: colorLabel };
+      if (isApparelCategory(product.category)) {
+        // Grade de tamanhos fixa, exibida em produtos de roupa/lingerie sem variação
+        // cadastrada no catálogo — aqui faz sentido oferecer P/M/G/GG pra escolha.
+        const STANDARD_SIZES = ['P', 'M', 'G', 'GG'];
+        const colorLabel = resolveColor(product) || 'Unica';
+        const sizeOptions = STANDARD_SIZES;
+        let selectedSize = sizeOptions[0];
+        _selectedVariant = { tamanho: selectedSize, cor: colorLabel };
 
-      const renderSizeOnly = () => {
-        const chips = sizeOptions.map(s => `<button class="variation-chip-sm${s === selectedSize ? ' active' : ''}" data-size="${s.replace(/"/g, '&quot;')}">${s}</button>`).join('');
-        card.innerHTML = `
-          ${ratingRowHtml}
-          <div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorLabel}</strong></div>
-          <div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${selectedSize}</strong></div>
-          <div class="ml-var-chips">${chips}</div>`;
+        const renderSizeOnly = () => {
+          const chips = sizeOptions.map(s => `<button class="variation-chip-sm${s === selectedSize ? ' active' : ''}" data-size="${s.replace(/"/g, '&quot;')}">${s}</button>`).join('');
+          card.innerHTML = `
+            ${ratingRowHtml}
+            <div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorLabel}</strong></div>
+            <div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${selectedSize}</strong></div>
+            <div class="ml-var-chips">${chips}</div>`;
 
-        card.querySelectorAll('.variation-chip-sm').forEach(btn => {
-          btn.addEventListener('click', () => {
-            selectedSize = btn.dataset.size;
-            _selectedVariant = { tamanho: selectedSize, cor: colorLabel };
-            renderSizeOnly();
+          card.querySelectorAll('.variation-chip-sm').forEach(btn => {
+            btn.addEventListener('click', () => {
+              selectedSize = btn.dataset.size;
+              _selectedVariant = { tamanho: selectedSize, cor: colorLabel };
+              renderSizeOnly();
+            });
           });
-        });
-      };
+        };
 
-      renderSizeOnly();
+        renderSizeOnly();
+        return;
+      }
+
+      // Categoria sem grade de roupa (Perfumaria, Sexshop, Outros...): só mostra Cor/Tamanho
+      // se o produto realmente tiver um valor cadastrado (ex: "200 ml"), sem inventar
+      // "Cor: Única" nem oferecer P/M/G/GG, que não fazem sentido pra esse tipo de item.
+      const realColor = resolveColor(product);
+      const realSize = resolveSize(product);
+      _selectedVariant = { tamanho: realSize || null, cor: realColor || null };
+      card.innerHTML = `
+        ${ratingRowHtml}
+        ${realColor ? `<div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${realColor}</strong></div>` : ''}
+        ${realSize ? `<div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${realSize}</strong></div>` : ''}`;
       return;
     }
 
@@ -921,12 +946,21 @@
       }
 
       if (!html) {
-        const colorLabel = sel.color || resolveColor(product) || 'Unica';
-        const sizeLabel = sel.storage || resolveSize(product) || 'Unico';
-        html = `
-          <div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorLabel}</strong></div>
-          <div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${sizeLabel}</strong></div>
-          <div class="ml-var-chips"><button class="variation-chip-sm active">${sizeLabel}</button></div>`;
+        if (isApparelCategory(product.category)) {
+          const colorLabel = sel.color || resolveColor(product) || 'Unica';
+          const sizeLabel = sel.storage || resolveSize(product) || 'Unico';
+          html = `
+            <div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorLabel}</strong></div>
+            <div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${sizeLabel}</strong></div>
+            <div class="ml-var-chips"><button class="variation-chip-sm active">${sizeLabel}</button></div>`;
+        } else {
+          // Sem grade de roupa aqui — só mostra se o produto tiver Cor/Tamanho reais cadastrados.
+          const colorLabel = sel.color || resolveColor(product);
+          const sizeLabel = sel.storage || resolveSize(product);
+          html = `
+            ${colorLabel ? `<div class="ml-var-line"><span class="ml-var-label">Cor:</span> <strong>${colorLabel}</strong></div>` : ''}
+            ${sizeLabel ? `<div class="ml-var-line"><span class="ml-var-label">Tamanho:</span> <strong>${sizeLabel}</strong></div>` : ''}`;
+        }
       }
 
       card.innerHTML = ratingRowHtml + html;
