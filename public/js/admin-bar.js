@@ -9,9 +9,9 @@
   const css = `
     #admin-bar {
       position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
-      height: 44px; background: #0f172a;
-      color: #e2e8f0; display: flex; align-items: center;
-      padding: 0 14px; gap: 8px;
+      min-height: 44px; background: #0f172a;
+      color: #e2e8f0; display: flex; align-items: center; flex-wrap: wrap;
+      padding: 6px 14px; gap: 6px 8px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 12px; font-weight: 500;
       box-shadow: 0 2px 12px rgba(0,0,0,.5);
@@ -27,13 +27,14 @@
     #admin-bar .ab-user {
       color: #94a3b8; font-size: 11px; flex-shrink: 0; margin-left: 2px;
     }
-    #admin-bar .ab-spacer { flex: 1; }
+    #admin-bar .ab-spacer { flex: 1 0 0; min-width: 0; }
     #admin-bar button, #admin-bar a.ab-btn {
       border: none; cursor: pointer; border-radius: 6px;
       padding: 5px 11px; font-size: 11px; font-weight: 600;
       transition: all .15s; font-family: inherit;
       text-decoration: none; white-space: nowrap;
       display: inline-flex; align-items: center; gap: 4px;
+      flex-shrink: 0;
     }
     #admin-bar .ab-edit-btn {
       background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
@@ -61,7 +62,7 @@
     #admin-bar .ab-deploy-btn:hover { background: #92400e; }
     #admin-bar .ab-deploy-btn.active { background: #b45309; color: #fff; }
     #ab-deploy-panel {
-      position: fixed; top: 50px; z-index: 100000;
+      position: fixed; top: calc(var(--admin-bar-h, 44px) + 6px); z-index: 100000;
       background: #0f172a; border: 1px solid #334155; border-radius: 10px;
       width: min(340px, 92vw); box-shadow: 0 12px 40px rgba(0,0,0,.5);
       padding: 14px; display: none;
@@ -90,9 +91,11 @@
     }
     #ab-deploy-status { font-size: 11px; color: #94a3b8; margin-top: 8px; min-height: 14px; }
     /* offset sticky header and fixed elements */
-    body.has-admin-bar { padding-top: 44px !important; }
-    body.has-admin-bar header { top: 44px !important; }
-    body.has-admin-bar .announcement-bar { top: 44px; }
+    /* --admin-bar-h é atualizado via JS com a altura real da barra — ela pode ocupar
+       mais de uma linha em telas estreitas (muitos botões não cabem numa linha só). */
+    body.has-admin-bar { padding-top: var(--admin-bar-h, 44px) !important; }
+    body.has-admin-bar header { top: var(--admin-bar-h, 44px) !important; }
+    body.has-admin-bar .announcement-bar { top: var(--admin-bar-h, 44px); }
     /* edit mode — activate card overlays */
     body.admin-edit-mode .olx-adcard { position: relative; overflow: visible !important; }
     body.admin-edit-mode .ae-overlay { display: flex !important; }
@@ -158,6 +161,16 @@
   `;
   document.body.insertBefore(bar, document.body.firstChild);
   document.body.classList.add('has-admin-bar');
+
+  // A barra pode quebrar em 2 linhas em telas estreitas (muitos botões) — mede a altura
+  // real e ajusta o espaço reservado no topo da página, pra nada ficar coberto por ela.
+  const syncBarHeight = () => {
+    document.documentElement.style.setProperty('--admin-bar-h', bar.offsetHeight + 'px');
+  };
+  syncBarHeight();
+  window.addEventListener('resize', syncBarHeight);
+  window.addEventListener('orientationchange', syncBarHeight);
+  if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe(bar);
 
   // Restore edit mode state from sessionStorage
   if (sessionStorage.getItem('admin-edit-mode') === '1') {
