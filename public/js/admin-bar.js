@@ -55,6 +55,40 @@
       background: transparent; color: #f87171; border: 1px solid transparent;
     }
     #admin-bar .ab-logout-btn:hover { background: #7f1d1d; color: #fecaca; border-color: #7f1d1d; }
+    #admin-bar .ab-deploy-btn {
+      background: #78350f; color: #fcd34d; border: 1px solid #b45309; flex-shrink: 0; margin-left: 4px;
+    }
+    #admin-bar .ab-deploy-btn:hover { background: #92400e; }
+    #admin-bar .ab-deploy-btn.active { background: #b45309; color: #fff; }
+    #ab-deploy-panel {
+      position: fixed; top: 50px; z-index: 100000;
+      background: #0f172a; border: 1px solid #334155; border-radius: 10px;
+      width: min(340px, 92vw); box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      padding: 14px; display: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #e2e8f0;
+    }
+    #ab-deploy-panel.open { display: block; }
+    #ab-deploy-panel h4 {
+      margin: 0 0 10px; font-size: 11px; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: .06em; font-weight: 800;
+    }
+    #ab-deploy-panel .ab-dp-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+    #ab-deploy-panel button.ab-dp-btn {
+      flex: 1; border: none; border-radius: 7px; padding: 9px 6px;
+      font-size: 11.5px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    #ab-deploy-panel button.ab-dp-btn:disabled { opacity: .5; cursor: default; }
+    .ab-dp-full  { background: #1d4ed8; color: #fff; }
+    .ab-dp-full:hover:not(:disabled)  { background: #1e40af; }
+    .ab-dp-quick { background: #b45309; color: #fff; }
+    .ab-dp-quick:hover:not(:disabled) { background: #92400e; }
+    #ab-deploy-term {
+      background: #000; color: #4ade80; font-family: 'Courier New', monospace; font-size: 10.5px;
+      border-radius: 6px; padding: 8px; max-height: 160px; overflow-y: auto; white-space: pre-wrap;
+      min-height: 36px; line-height: 1.4;
+    }
+    #ab-deploy-status { font-size: 11px; color: #94a3b8; margin-top: 8px; min-height: 14px; }
     /* offset sticky header and fixed elements */
     body.has-admin-bar { padding-top: 44px !important; }
     body.has-admin-bar header { top: 44px !important; }
@@ -114,6 +148,7 @@
   bar.innerHTML = `
     <span class="ab-badge">${isSuperAdmin ? '★' : '⚙'} ${isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN'}</span>
     <span class="ab-user">${firstName}</span>
+    <button class="ab-btn ab-deploy-btn" id="ab-deploy-btn" title="Atualizar o site (deploy)">🚀 Deploy</button>
     <span class="ab-spacer"></span>
     <button class="ab-edit-btn" id="ab-edit-btn" title="Ativar modo de edição inline nos produtos">✏ Modo Edição</button>
     <button class="ab-new-btn" id="ab-new-btn" title="Criar novo produto no catálogo">+ Novo Produto</button>
@@ -153,6 +188,107 @@
     sessionStorage.removeItem('admin-edit-mode');
     location.reload();
   });
+
+  // ── Deploy popover — mesmo endpoint que o botão "Deploy" do /devops usa ─────────
+  let deployPanel = null;
+
+  function buildDeployPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'ab-deploy-panel';
+    panel.innerHTML = `
+      <h4>🚀 Deploy do site</h4>
+      <div class="ab-dp-actions">
+        <button class="ab-dp-btn ab-dp-full" id="ab-dp-full" title="Faz backup, atualiza e reinicia">Deploy Completo</button>
+        <button class="ab-dp-btn ab-dp-quick" id="ab-dp-quick" title="Atualiza e reinicia sem backup">Deploy Rápido</button>
+      </div>
+      <div id="ab-deploy-term">Aguardando comando...</div>
+      <div id="ab-deploy-status"></div>
+    `;
+    document.body.appendChild(panel);
+
+    panel.querySelector('#ab-dp-full').addEventListener('click', () => {
+      if (confirm('Isso vai fazer backup dos dados, baixar as atualizações mais recentes e reiniciar o site. Pode levar alguns minutos. Continuar?')) {
+        runDeploy('full');
+      }
+    });
+    panel.querySelector('#ab-dp-quick').addEventListener('click', () => {
+      if (confirm('Isso vai atualizar e reiniciar o site SEM fazer backup antes. Use apenas se tiver certeza. Continuar?')) {
+        runDeploy('quick');
+      }
+    });
+
+    return panel;
+  }
+
+  function toggleDeployPanel() {
+    if (!deployPanel) deployPanel = buildDeployPanel();
+    const btn = document.getElementById('ab-deploy-btn');
+    if (deployPanel.classList.contains('open')) {
+      deployPanel.classList.remove('open');
+      btn.classList.remove('active');
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const panelWidth = Math.min(340, window.innerWidth * 0.92);
+    deployPanel.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8)) + 'px';
+    deployPanel.classList.add('open');
+    btn.classList.add('active');
+  }
+
+  document.getElementById('ab-deploy-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    toggleDeployPanel();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!deployPanel || !deployPanel.classList.contains('open')) return;
+    if (deployPanel.contains(e.target)) return;
+    deployPanel.classList.remove('open');
+    document.getElementById('ab-deploy-btn').classList.remove('active');
+  });
+
+  async function runDeploy(mode) {
+    const term = document.getElementById('ab-deploy-term');
+    const status = document.getElementById('ab-deploy-status');
+    const btnFull = document.getElementById('ab-dp-full');
+    const btnQuick = document.getElementById('ab-dp-quick');
+    btnFull.disabled = true; btnQuick.disabled = true;
+    term.textContent = '';
+    status.textContent = mode === 'quick' ? '⚡ Iniciando deploy rápido...' : '🚀 Iniciando deploy completo...';
+
+    try {
+      const resp = await fetch('/api/admin/system/deploy', {
+        method: 'POST',
+        headers: { 'X-Auth-Token': session.token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const ln of lines) {
+          if (!ln.startsWith('data: ')) continue;
+          try {
+            const { type, data } = JSON.parse(ln.slice(6));
+            term.textContent += data + '\n';
+            term.scrollTop = term.scrollHeight;
+            if (type === 'done')  status.textContent = '✓ ' + data;
+            if (type === 'error') status.textContent = '✕ ' + data;
+          } catch (parseErr) {}
+        }
+      }
+    } catch (e) {
+      term.textContent += 'Erro de conexão: ' + e.message + '\n';
+      status.textContent = '✕ Falha ao conectar com o servidor.';
+    }
+
+    btnFull.disabled = false; btnQuick.disabled = false;
+  }
 
   // Expose session for admin-edit.js
   window._adminSession = session;
