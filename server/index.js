@@ -580,6 +580,7 @@ app.get('/api/site-config', (req, res) => {
   res.json({
     siteName:       sc.siteName       || "DAMA'S SECRETA",
     whatsappNumber: sc.whatsappNumber || '5511920041484',
+    contactEmail:   sc.contactEmail   || 'layjessica01@gmail.com',
     instagramUrl:   sc.instagramUrl   || 'https://www.instagram.com/luar.seducao/',
     logoUrl:        sc.logoUrl        || ''
   });

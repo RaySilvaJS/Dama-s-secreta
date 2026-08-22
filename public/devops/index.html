@@ -875,8 +875,12 @@ tbody tr:last-child td { border-bottom: none; }
             <input id="brand-name" class="input" style="width:100%" placeholder="DAMA'S SECRETA"/>
           </div>
           <div>
-            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Número WhatsApp (DDI+DDD+número, só dígitos)</label>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Número WhatsApp / Telefone (DDI+DDD+número, só dígitos)</label>
             <input id="brand-whatsapp" class="input" style="width:100%" placeholder="5521988631029"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">E-mail de Contato (aparece no site para os clientes)</label>
+            <input id="brand-email" type="email" class="input" style="width:100%" placeholder="contato@seudominio.com"/>
           </div>
           <div>
             <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Link do Instagram</label>
@@ -5572,12 +5576,14 @@ async function loadSiteBrandForm() {
     const cfg = await api.get('/api/admin/site-config');
     if (!cfg) return;
     pendingLogoUrl = cfg.logoUrl || '';
-    const nameEl = document.getElementById('brand-name');
-    const waEl   = document.getElementById('brand-whatsapp');
-    const igEl   = document.getElementById('brand-instagram');
-    if (nameEl) nameEl.value = cfg.siteName || '';
-    if (waEl)   waEl.value   = cfg.whatsappNumber || '';
-    if (igEl)   igEl.value   = cfg.instagramUrl || '';
+    const nameEl  = document.getElementById('brand-name');
+    const waEl    = document.getElementById('brand-whatsapp');
+    const emailEl = document.getElementById('brand-email');
+    const igEl    = document.getElementById('brand-instagram');
+    if (nameEl)  nameEl.value  = cfg.siteName || '';
+    if (waEl)    waEl.value    = cfg.whatsappNumber || '';
+    if (emailEl) emailEl.value = cfg.contactEmail || '';
+    if (igEl)    igEl.value    = cfg.instagramUrl || '';
     renderBrandLogoPreview(pendingLogoUrl);
   } catch {}
 }
@@ -5604,11 +5610,12 @@ function removeBrandLogo() {
 async function saveSiteBrand() {
   const siteName       = document.getElementById('brand-name')?.value.trim();
   const whatsappNumber = document.getElementById('brand-whatsapp')?.value.trim();
+  const contactEmail   = document.getElementById('brand-email')?.value.trim();
   const instagramUrl   = document.getElementById('brand-instagram')?.value.trim();
   const fb             = document.getElementById('brand-feedback');
 
   try {
-    const r = await api.post('/api/admin/site-config', { siteName, whatsappNumber, instagramUrl, logoUrl: pendingLogoUrl });
+    const r = await api.post('/api/admin/site-config', { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl: pendingLogoUrl });
     if (fb) {
       fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
       fb.textContent  = r?.ok ? '✓ Configurações salvas!' : (r?.error || 'Erro ao salvar.');

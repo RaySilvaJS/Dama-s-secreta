@@ -1093,11 +1093,16 @@ router.get('/site-config', adminAuth, (req, res) => {
 });
 
 router.post('/site-config', adminAuth, (req, res) => {
-  const { siteName, whatsappNumber, instagramUrl, logoUrl } = req.body;
+  const { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl } = req.body;
+  const trimmedEmail = (contactEmail || '').trim();
+  if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+    return res.status(400).json({ ok: false, error: 'E-mail de contato inválido.' });
+  }
   const cfg = loadConfig();
   cfg.siteConfig = {
     siteName:       (siteName       || "DAMA'S SECRETA").trim(),
     whatsappNumber: (whatsappNumber || '').replace(/\D/g, ''),
+    contactEmail:   trimmedEmail,
     instagramUrl:   (instagramUrl   || '').trim(),
     logoUrl:        (logoUrl        || '').trim()
   };
