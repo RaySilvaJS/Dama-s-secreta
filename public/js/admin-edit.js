@@ -50,6 +50,38 @@
   const btn = (bg, color, extra) => `background:${bg};color:${color};border:1px solid transparent;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:opacity .15s;${extra || ''}`;
   const lbl = (text) => `<span style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:4px;">${text}</span>`;
 
+  // Redimensiona/comprime a foto no canvas antes de enviar — evita que uma foto de celular
+  // (6-12MB) vire o arquivo que o site carrega. Se der erro (ex: formato que o navegador não
+  // decodifica), cai de volta pro arquivo original em vez de travar o upload.
+  const compressImageFile = (file, maxDim, quality) => {
+    maxDim = maxDim || 1600;
+    quality = quality || 0.82;
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = () => {
+        const originalDataUrl = reader.result;
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const scale = Math.min(1, maxDim / Math.max(w, h));
+            const cw = Math.max(1, Math.round(w * scale));
+            const ch = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = cw; canvas.height = ch;
+            canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+            const out = canvas.toDataURL('image/jpeg', quality);
+            resolve(out && out.length > 100 ? out : originalDataUrl);
+          } catch (e) { resolve(originalDataUrl); }
+        };
+        img.onerror = () => resolve(originalDataUrl);
+        img.src = originalDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   // ── Card overlay attachment ───────────────────────────────────────────────────
 
   const attached = new WeakSet();
@@ -185,7 +217,7 @@
           </div>
           <label id="ae-img-drop" style="display:block;border:2px dashed #cbd5e1;border-radius:8px;padding:14px;text-align:center;cursor:pointer;color:#64748b;font-size:12px;transition:border-color .15s;">
             📁 Clique aqui ou arraste uma imagem<br>
-            <small style="color:#94a3b8;">PNG, JPG, WebP • Máx 10MB</small>
+            <small style="color:#94a3b8;">PNG, JPG, WebP • a foto é comprimida automaticamente</small>
             <input type="file" id="ae-img-file" accept="image/*" style="display:none;">
           </label>
           <div id="ae-img-prog" style="font-size:12px;color:#64748b;min-height:18px;margin-top:6px;"></div>
@@ -330,23 +362,20 @@
 
   async function uploadFile(file) {
     if (!file || !productData) return;
-    if (file.size > 10 * 1024 * 1024) return showToast('Arquivo muito grande (máx 10MB).', true);
+    if (file.size > 18 * 1024 * 1024) return showToast('Arquivo muito grande (máx 18MB).', true);
     const prog = document.getElementById('ae-img-prog');
-    if (prog) prog.textContent = '⏳ Enviando...';
-    const reader = new FileReader();
-    reader.onload = async e => {
-      const r = await api('POST', '/api/admin/upload', { dataUrl: e.target.result, filename: file.name });
-      if (r.success) {
-        productData.images = productData.images || [];
-        productData.images.unshift(r.url); // nova imagem vai para a frente como principal
-        renderImages(productData.images);
-        if (prog) { prog.textContent = '✓ Imagem adicionada como principal!'; setTimeout(() => { if (prog) prog.textContent = ''; }, 2500); }
-      } else {
-        if (prog) prog.textContent = '✕ ' + (r.error || 'Erro no upload');
-        showToast(r.error || 'Erro ao fazer upload.', true);
-      }
-    };
-    reader.readAsDataURL(file);
+    if (prog) prog.textContent = '⏳ Comprimindo e enviando...';
+    const dataUrl = await compressImageFile(file);
+    const r = await api('POST', '/api/admin/upload', { dataUrl, filename: file.name });
+    if (r.success) {
+      productData.images = productData.images || [];
+      productData.images.unshift(r.url); // nova imagem vai para a frente como principal
+      renderImages(productData.images);
+      if (prog) { prog.textContent = '✓ Imagem adicionada como principal!'; setTimeout(() => { if (prog) prog.textContent = ''; }, 2500); }
+    } else {
+      if (prog) prog.textContent = '✕ Não foi possível enviar esta foto. Tentar novamente';
+      showToast(r.error || 'Erro ao fazer upload.', true);
+    }
   }
 
   function renderHistory(history) {
@@ -573,6 +602,7 @@
   // ── New Product Modal ─────────────────────────────────────────────────────────
 
   let modal = null;
+  let newProductUploadedUrl = null;
 
   window.adminOpenNewProduct = function () {
     if (!modal) modal = buildNewModal();
@@ -583,6 +613,11 @@
       else el.value = '';
       delete el._dirty;
     });
+    newProductUploadedUrl = null;
+    const preview = modal.querySelector('#ae-m-img-preview');
+    const prog = modal.querySelector('#ae-m-img-prog');
+    if (preview) preview.style.display = 'none';
+    if (prog) prog.textContent = '';
     modal.style.display = 'flex';
   };
 
@@ -609,7 +644,17 @@
             <label>${lbl('TAMANHO')}<input id="ae-m-storage" style="${f()}" placeholder="P / M / G / GG"></label>
             <label>${lbl('ESTOQUE')}<input id="ae-m-stock" type="number" style="${f()}" placeholder="1"></label>
             <label>${lbl('CONDIÇÃO')}<select id="ae-m-condition" style="${f()}"><option>Novo</option><option>Seminovo</option><option>Usado</option></select></label>
-            <label style="grid-column:1/-1;">${lbl('URL DA IMAGEM PRINCIPAL')}<input id="ae-m-img" style="${f()}" placeholder="https://..."></label>
+            <div style="grid-column:1/-1;">${lbl('FOTO PRINCIPAL')}
+              <div id="ae-m-img-preview" style="display:none;margin-bottom:8px;">
+                <img id="ae-m-img-preview-img" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;" alt="">
+              </div>
+              <label id="ae-m-img-drop" style="display:block;border:2px dashed #cbd5e1;border-radius:8px;padding:12px;text-align:center;cursor:pointer;color:#64748b;font-size:12px;transition:border-color .15s;">
+                📁 Clique aqui ou arraste uma foto<br><small style="color:#94a3b8;">Enviada e comprimida automaticamente</small>
+                <input type="file" id="ae-m-img-file" accept="image/*" style="display:none;">
+              </label>
+              <div id="ae-m-img-prog" style="font-size:11px;color:#64748b;min-height:16px;margin-top:4px;"></div>
+              <input id="ae-m-img" style="${f('margin-top:6px;')}" placeholder="...ou cole uma URL de imagem existente">
+            </div>
             <label style="grid-column:1/-1;">${lbl('DESCRIÇÃO')}<textarea id="ae-m-desc" rows="3" style="${f('resize:vertical;')}" placeholder="Descrição..."></textarea></label>
           </div>
           <div style="display:flex;gap:8px;margin-top:16px;">
@@ -625,6 +670,35 @@
     el.querySelector('#ae-m-close').addEventListener('click', () => { el.style.display = 'none'; });
     el.querySelector('#ae-m-cancel').addEventListener('click', () => { el.style.display = 'none'; });
     el.querySelector('#ae-m-save').addEventListener('click', () => createProduct(el));
+
+    // Foto principal: upload com compressão (arrasta ou clica) — vira link, não pesa o site
+    const imgDrop = el.querySelector('#ae-m-img-drop');
+    const imgFileIn = el.querySelector('#ae-m-img-file');
+    const imgProg = el.querySelector('#ae-m-img-prog');
+    const imgPreview = el.querySelector('#ae-m-img-preview');
+    const imgPreviewImg = el.querySelector('#ae-m-img-preview-img');
+
+    async function handleNewProductImage(file) {
+      if (!file) return;
+      if (file.size > 18 * 1024 * 1024) return showToast('Arquivo muito grande (máx 18MB).', true);
+      imgProg.textContent = '⏳ Comprimindo e enviando...';
+      const dataUrl = await compressImageFile(file);
+      const r = await api('POST', '/api/admin/upload', { dataUrl, filename: file.name });
+      if (r.success) {
+        newProductUploadedUrl = r.url;
+        imgPreview.style.display = 'block';
+        imgPreviewImg.src = r.url;
+        imgProg.textContent = '✓ Foto enviada!';
+        setTimeout(() => { if (imgProg.textContent === '✓ Foto enviada!') imgProg.textContent = ''; }, 2000);
+      } else {
+        imgProg.textContent = '✕ Não foi possível enviar esta foto. Tentar novamente';
+        showToast(r.error || 'Erro ao enviar imagem.', true);
+      }
+    }
+    imgDrop.addEventListener('dragover', e => { e.preventDefault(); imgDrop.style.borderColor = '#3b82f6'; });
+    imgDrop.addEventListener('dragleave', () => { imgDrop.style.borderColor = '#cbd5e1'; });
+    imgDrop.addEventListener('drop', e => { e.preventDefault(); imgDrop.style.borderColor = '#cbd5e1'; handleNewProductImage(e.dataTransfer.files[0]); });
+    imgFileIn.addEventListener('change', e => handleNewProductImage(e.target.files[0]));
 
     // Auto-generate ID from name
     el.querySelector('#ae-m-name').addEventListener('input', function () {
@@ -655,7 +729,7 @@
       model: g('ae-m-model'), color: g('ae-m-color'),
       storage: g('ae-m-storage'), stock: parseInt(g('ae-m-stock')) || 1,
       condition: g('ae-m-condition'), description: g('ae-m-desc'),
-      images: g('ae-m-img') ? [g('ae-m-img')] : [],
+      images: newProductUploadedUrl ? [newProductUploadedUrl] : (g('ae-m-img') ? [g('ae-m-img')] : []),
       isNew: g('ae-m-condition') === 'Novo', rating: 5.0, reviews: 0
     });
 
@@ -663,6 +737,7 @@
 
     if (r.success) {
       showToast(`✓ "${r.product.name}" criado em ${CATALOGS[catalog]}!`);
+      newProductUploadedUrl = null;
       el.style.display = 'none';
     } else {
       showToast(r.error || 'Erro ao criar produto.', true);
