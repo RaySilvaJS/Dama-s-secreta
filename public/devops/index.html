@@ -887,6 +887,16 @@ tbody tr:last-child td { border-bottom: none; }
             <input id="brand-instagram" class="input" style="width:100%" placeholder="https://www.instagram.com/seu.perfil/"/>
           </div>
           <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">CNPJ (rodapé do site)</label>
+            <input id="brand-cnpj" class="input" style="width:100%" placeholder="00.000.000/0001-00"/>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Deixe em branco para não exibir no rodapé.</div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Localização (rodapé do site)</label>
+            <input id="brand-location" class="input" style="width:100%" placeholder="Cidade, UF — Brasil"/>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Deixe em branco para não exibir no rodapé.</div>
+          </div>
+          <div>
             <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Logo (imagem)</label>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <div id="brand-logo-preview" style="font-size:12px;color:var(--muted)">Nenhuma logo enviada — usando texto.</div>
@@ -5576,14 +5586,21 @@ async function loadSiteBrandForm() {
     const cfg = await api.get('/api/admin/site-config');
     if (!cfg) return;
     pendingLogoUrl = cfg.logoUrl || '';
-    const nameEl  = document.getElementById('brand-name');
-    const waEl    = document.getElementById('brand-whatsapp');
-    const emailEl = document.getElementById('brand-email');
-    const igEl    = document.getElementById('brand-instagram');
+    const nameEl     = document.getElementById('brand-name');
+    const waEl       = document.getElementById('brand-whatsapp');
+    const emailEl    = document.getElementById('brand-email');
+    const igEl       = document.getElementById('brand-instagram');
+    const cnpjEl     = document.getElementById('brand-cnpj');
+    const locationEl = document.getElementById('brand-location');
     if (nameEl)  nameEl.value  = cfg.siteName || '';
     if (waEl)    waEl.value    = cfg.whatsappNumber || '';
     if (emailEl) emailEl.value = cfg.contactEmail || '';
     if (igEl)    igEl.value    = cfg.instagramUrl || '';
+    // undefined = campo nunca foi salvo neste painel ainda — mostra o valor que já está
+    // fixo no site hoje, pra não parecer "vazio" sem realmente estar. Assim que ela salvar
+    // uma vez (mesmo sem mexer aqui), o valor atual é preservado normalmente.
+    if (cnpjEl)     cnpjEl.value     = cfg.cnpj     !== undefined ? cfg.cnpj     : '28.899.526/0001-74';
+    if (locationEl) locationEl.value = cfg.location !== undefined ? cfg.location : 'Rio de Janeiro, RJ — Brasil';
     renderBrandLogoPreview(pendingLogoUrl);
   } catch {}
 }
@@ -5612,10 +5629,12 @@ async function saveSiteBrand() {
   const whatsappNumber = document.getElementById('brand-whatsapp')?.value.trim();
   const contactEmail   = document.getElementById('brand-email')?.value.trim();
   const instagramUrl   = document.getElementById('brand-instagram')?.value.trim();
+  const cnpj           = document.getElementById('brand-cnpj')?.value.trim();
+  const location       = document.getElementById('brand-location')?.value.trim();
   const fb             = document.getElementById('brand-feedback');
 
   try {
-    const r = await api.post('/api/admin/site-config', { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl: pendingLogoUrl });
+    const r = await api.post('/api/admin/site-config', { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl: pendingLogoUrl, cnpj, location });
     if (fb) {
       fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
       fb.textContent  = r?.ok ? '✓ Configurações salvas!' : (r?.error || 'Erro ao salvar.');

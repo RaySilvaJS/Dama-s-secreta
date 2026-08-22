@@ -582,7 +582,11 @@ app.get('/api/site-config', (req, res) => {
     whatsappNumber: sc.whatsappNumber || '5511920041484',
     contactEmail:   sc.contactEmail   || 'layjessica01@gmail.com',
     instagramUrl:   sc.instagramUrl   || 'https://www.instagram.com/luar.seducao/',
-    logoUrl:        sc.logoUrl        || ''
+    logoUrl:        sc.logoUrl        || '',
+    // undefined = nunca configurado no painel (mantém o que já está fixo no site);
+    // string vazia = admin apagou o campo de propósito (some do rodapé)
+    cnpj:           sc.cnpj     !== undefined ? sc.cnpj     : '28.899.526/0001-74',
+    location:       sc.location !== undefined ? sc.location : 'Rio de Janeiro, RJ — Brasil'
   });
 });
 

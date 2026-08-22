@@ -1093,7 +1093,7 @@ router.get('/site-config', adminAuth, (req, res) => {
 });
 
 router.post('/site-config', adminAuth, (req, res) => {
-  const { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl } = req.body;
+  const { siteName, whatsappNumber, contactEmail, instagramUrl, logoUrl, cnpj, location } = req.body;
   const trimmedEmail = (contactEmail || '').trim();
   if (trimmedEmail && !isValidEmail(trimmedEmail)) {
     return res.status(400).json({ ok: false, error: 'E-mail de contato inválido.' });
@@ -1104,7 +1104,10 @@ router.post('/site-config', adminAuth, (req, res) => {
     whatsappNumber: (whatsappNumber || '').replace(/\D/g, ''),
     contactEmail:   trimmedEmail,
     instagramUrl:   (instagramUrl   || '').trim(),
-    logoUrl:        (logoUrl        || '').trim()
+    logoUrl:        (logoUrl        || '').trim(),
+    // string vazia aqui é intencional: admin apagou o campo pra ele sumir do rodapé do site
+    cnpj:           (cnpj     || '').trim(),
+    location:       (location || '').trim()
   };
   saveConfig(cfg);
   audit.append('site_config_updated', req.adminUser?.email || 'devops', req.ip, { siteName: cfg.siteConfig.siteName });

@@ -5,7 +5,9 @@
     whatsappNumber: '5511920041484',
     contactEmail: 'layjessica01@gmail.com',
     instagramUrl: 'https://www.instagram.com/luar.seducao/',
-    logoUrl: ''
+    logoUrl: '',
+    cnpj: '28.899.526/0001-74',
+    location: 'Rio de Janeiro, RJ — Brasil'
   };
 
   // Formata um número BR (com ou sem DDI 55) como "(DD) 9XXXX-XXXX" / "(DD) XXXX-XXXX".
@@ -100,6 +102,19 @@
     });
   }
 
+  // CNPJ e Localização: campo vazio no painel = some do rodapé (não dá pra "substituir por
+  // nada" com troca de texto, por isso aqui a linha inteira é escondida via display:none).
+  function applyCompanyInfo(cfg) {
+    document.querySelectorAll('.footer-cnpj').forEach(function (el) {
+      if (cfg.cnpj) { el.textContent = 'CNPJ: ' + cfg.cnpj; el.style.display = ''; }
+      else { el.style.display = 'none'; }
+    });
+    document.querySelectorAll('.footer-location').forEach(function (el) {
+      if (cfg.location) { el.textContent = cfg.location; el.style.display = ''; }
+      else { el.style.display = 'none'; }
+    });
+  }
+
   function applyTextAndMeta(cfg) {
     if (cfg.siteName === DEFAULT_NAME) return;
 
@@ -128,6 +143,7 @@
     applyWhatsApp(cfg);
     applyEmail(cfg);
     applyInstagram(cfg);
+    applyCompanyInfo(cfg);
     applyTextAndMeta(cfg);
     window.__siteConfig = cfg;
   }
