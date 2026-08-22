@@ -90,12 +90,15 @@
       min-height: 36px; line-height: 1.4;
     }
     #ab-deploy-status { font-size: 11px; color: #94a3b8; margin-top: 8px; min-height: 14px; }
-    /* offset sticky header and fixed elements */
     /* --admin-bar-h é atualizado via JS com a altura real da barra — ela pode ocupar
-       mais de uma linha em telas estreitas (muitos botões não cabem numa linha só). */
+       mais de uma linha em telas estreitas (muitos botões não cabem numa linha só).
+       Só reserva o espaço no topo da página (padding-top do body): o header do site
+       usa "position: sticky", mas o sticky não está realmente funcionando nesta página
+       (algum ancestral com overflow não-visible quebra o contexto de scroll dele — o
+       header já rola junto com a página normalmente para qualquer visitante, mesmo sem
+       barra de admin). Forçar um "top" nele aqui apenas empurrava o header pra baixo do
+       necessário no primeiro carregamento, sobrepondo a faixa de benefícios logo abaixo. */
     body.has-admin-bar { padding-top: var(--admin-bar-h, 44px) !important; }
-    body.has-admin-bar header { top: var(--admin-bar-h, 44px) !important; }
-    body.has-admin-bar .announcement-bar { top: var(--admin-bar-h, 44px); }
     /* edit mode — activate card overlays */
     body.admin-edit-mode .olx-adcard { position: relative; overflow: visible !important; }
     body.admin-edit-mode .ae-overlay { display: flex !important; }
