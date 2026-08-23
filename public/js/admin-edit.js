@@ -137,6 +137,12 @@
   let drawer = null;
   let productData = null;
   let catalogKey = null;
+  let aeCvState = []; // [{name,hex,images,stock,sku}] — drawer de edição
+  let aeCvDefault = '';
+  let aeCvUploadTarget = -1;
+  let aeCvMState = []; // mesma coisa, mas pro modal "+ Novo Produto" (IDs diferentes, evita colisão)
+  let aeCvMDefault = '';
+  let aeCvMUploadTarget = -1;
 
   function createDrawer() {
     const el = document.createElement('div');
@@ -162,6 +168,7 @@
         <div style="display:flex;gap:0;padding:10px 18px 0;border-bottom:1px solid rgba(255,255,255,.1);">
           <button data-tab="edit"    class="ae-tab-btn ae-tab-active" style="background:transparent;border:none;color:#fff;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid #3b82f6;font-family:inherit;">Campos</button>
           <button data-tab="images"  class="ae-tab-btn" style="background:transparent;border:none;color:rgba(255,255,255,.6);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;">Imagens</button>
+          <button data-tab="colors"  class="ae-tab-btn" style="background:transparent;border:none;color:rgba(255,255,255,.6);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;">Cores</button>
           <button data-tab="history" class="ae-tab-btn" style="background:transparent;border:none;color:rgba(255,255,255,.6);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;">Histórico</button>
         </div>
       </div>
@@ -223,6 +230,18 @@
           <div id="ae-img-prog" style="font-size:12px;color:#64748b;min-height:18px;margin-top:6px;"></div>
         </div>
 
+        <!-- COLORS TAB -->
+        <div id="ae-tab-colors" style="display:none;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:10px;">
+            <input type="checkbox" id="ae-f-has-colors" style="width:15px;height:15px;cursor:pointer;"> Este produto tem variações de cor?
+          </label>
+          <div id="ae-cv-body" style="display:none;">
+            <div id="ae-cv-list"></div>
+            <button type="button" id="ae-cv-add-btn" style="${btn('#1d4ed8','#fff','width:100%;justify-content:center;margin-top:4px;')}">+ Adicionar cor</button>
+            <p style="font-size:11px;color:#94a3b8;margin:8px 0 0;">A primeira foto de cada cor é a principal. Marque uma cor como "Padrão".</p>
+          </div>
+        </div>
+
         <!-- HISTORY TAB -->
         <div id="ae-tab-history" style="display:none;">
           <p style="font-size:12px;color:#64748b;margin:0 0 12px;">Últimas 50 alterações registradas.</p>
@@ -255,10 +274,11 @@
           b.style.color = b.dataset.tab === name ? '#fff' : 'rgba(255,255,255,.6)';
           b.style.borderBottomColor = b.dataset.tab === name ? '#3b82f6' : 'transparent';
         });
-        ['edit','images','history'].forEach(t => {
+        ['edit','images','colors','history'].forEach(t => {
           document.getElementById(`ae-tab-${t}`).style.display = t === name ? 'block' : 'none';
         });
         if (name === 'images' && productData) renderImages(productData.images || []);
+        if (name === 'colors') renderAeCv();
         if (name === 'history' && productData) renderHistory(productData._history || []);
       });
     });
@@ -301,8 +321,131 @@
     drop.addEventListener('drop', e => { e.preventDefault(); drop.style.borderColor = '#cbd5e1'; uploadFile(e.dataTransfer.files[0]); });
     fileIn.addEventListener('change', e => uploadFile(e.target.files[0]));
 
+    // Variações de cor
+    el.querySelector('#ae-f-has-colors').addEventListener('change', toggleAeCvBody);
+    el.querySelector('#ae-cv-add-btn').addEventListener('click', addAeCv);
+
     window.addEventListener('keydown', e => { if (e.key === 'Escape' && drawer) closeDrawer(); });
     return el;
+  }
+
+  function toggleAeCvBody() {
+    const on = document.getElementById('ae-f-has-colors').checked;
+    document.getElementById('ae-cv-body').style.display = on ? 'block' : 'none';
+    if (on && aeCvState.length === 0) addAeCv();
+  }
+
+  function addAeCv() {
+    aeCvState.push({ name: '', hex: '', images: [], stock: 0, sku: '' });
+    renderAeCv();
+  }
+
+  function removeAeCv(i) {
+    const removed = aeCvState[i];
+    aeCvState.splice(i, 1);
+    if (removed && removed.name === aeCvDefault) aeCvDefault = aeCvState[0] ? aeCvState[0].name : '';
+    renderAeCv();
+  }
+
+  function moveAeCv(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= aeCvState.length) return;
+    const tmp = aeCvState[i]; aeCvState[i] = aeCvState[j]; aeCvState[j] = tmp;
+    renderAeCv();
+  }
+
+  function renderAeCv() {
+    const list = document.getElementById('ae-cv-list');
+    if (!list) return;
+    list.innerHTML = aeCvState.map((v, i) => {
+      const isDefault = v.name && v.name === aeCvDefault;
+      const photos = (v.images || []).map((url, pi) => `
+        <div style="position:relative;width:52px;">
+          ${pi === 0 ? `<span style="position:absolute;top:-5px;left:-5px;background:#f59e0b;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:4px;z-index:1;">★</span>` : ''}
+          <button type="button" data-cv-photo-rm="${i}_${pi}" style="position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border:2px solid #fff;width:16px;height:16px;border-radius:50%;font-size:9px;cursor:pointer;line-height:1;">✕</button>
+          <img src="${url}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid ${pi===0?'#f59e0b':'#e2e8f0'};">
+        </div>`).join('');
+      return `
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;background:#f8fafc;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          ${v.hex ? `<span style="width:15px;height:15px;border-radius:50%;background:${v.hex};border:1px solid #e2e8f0;flex-shrink:0;"></span>` : ''}
+          <label style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:${isDefault?'#b45309':'#94a3b8'};cursor:pointer;">
+            <input type="radio" name="ae-cv-default-radio" data-cv-default="${i}" ${isDefault?'checked':''}> ${isDefault?'★ Padrão':'Padrão'}
+          </label>
+          <span style="flex:1;"></span>
+          <button type="button" data-cv-up="${i}" style="${btn('#f1f5f9','#374151','padding:3px 7px;font-size:10px;')}" ${i===0?'disabled':''}>↑</button>
+          <button type="button" data-cv-dn="${i}" style="${btn('#f1f5f9','#374151','padding:3px 7px;font-size:10px;')}" ${i===aeCvState.length-1?'disabled':''}>↓</button>
+          <button type="button" data-cv-rm="${i}" style="${btn('#fef2f2','#dc2626','padding:3px 7px;font-size:10px;')}">🗑</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px;gap:6px;margin-bottom:8px;">
+          <input data-cv-field="name" data-cv-idx="${i}" value="${(v.name||'').replace(/"/g,'&quot;')}" style="${f()}" placeholder="Nome da cor (ex: Rosa)">
+          <input type="color" data-cv-field="hex" data-cv-idx="${i}" value="${v.hex||'#e8518a'}" style="${f('padding:2px;height:34px;')}">
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">${photos}
+          <button type="button" data-cv-addphoto="${i}" style="width:52px;height:52px;border-radius:6px;border:2px dashed #cbd5e1;background:#fff;color:#94a3b8;font-size:16px;cursor:pointer;">+</button>
+        </div>
+        <div data-cv-progress="${i}" style="font-size:10px;color:#64748b;min-height:13px;margin-bottom:6px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <input type="number" min="0" data-cv-field="stock" data-cv-idx="${i}" value="${v.stock??0}" style="${f()}" placeholder="Estoque">
+          <input data-cv-field="sku" data-cv-idx="${i}" value="${(v.sku||'').replace(/"/g,'&quot;')}" style="${f()}" placeholder="SKU (opcional)">
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-cv-field]').forEach(el => {
+      el.addEventListener('input', () => {
+        const i = +el.getAttribute('data-cv-idx');
+        const field = el.getAttribute('data-cv-field');
+        const v = aeCvState[i]; if (!v) return;
+        const wasDefault = v.name && v.name === aeCvDefault;
+        v[field] = field === 'stock' ? (parseInt(el.value, 10) || 0) : el.value;
+        if (wasDefault) aeCvDefault = v.name;
+      });
+    });
+    list.querySelectorAll('[data-cv-default]').forEach(el => el.addEventListener('change', () => {
+      const i = +el.getAttribute('data-cv-default');
+      aeCvDefault = aeCvState[i] ? aeCvState[i].name : '';
+      renderAeCv();
+    }));
+    list.querySelectorAll('[data-cv-up]').forEach(el => el.addEventListener('click', () => moveAeCv(+el.getAttribute('data-cv-up'), -1)));
+    list.querySelectorAll('[data-cv-dn]').forEach(el => el.addEventListener('click', () => moveAeCv(+el.getAttribute('data-cv-dn'), 1)));
+    list.querySelectorAll('[data-cv-rm]').forEach(el => el.addEventListener('click', () => removeAeCv(+el.getAttribute('data-cv-rm'))));
+    list.querySelectorAll('[data-cv-addphoto]').forEach(el => el.addEventListener('click', () => {
+      aeCvUploadTarget = +el.getAttribute('data-cv-addphoto');
+      aeCvFileInput.value = '';
+      aeCvFileInput.click();
+    }));
+    list.querySelectorAll('[data-cv-photo-rm]').forEach(el => el.addEventListener('click', () => {
+      const [vi, pi] = el.getAttribute('data-cv-photo-rm').split('_').map(Number);
+      if (aeCvState[vi]) { aeCvState[vi].images.splice(pi, 1); renderAeCv(); }
+    }));
+  }
+
+  const aeCvFileInput = document.createElement('input');
+  aeCvFileInput.type = 'file'; aeCvFileInput.accept = 'image/*'; aeCvFileInput.multiple = true; aeCvFileInput.style.display = 'none';
+  document.body.appendChild(aeCvFileInput);
+  aeCvFileInput.addEventListener('change', e => {
+    const files = Array.prototype.filter.call(e.target.files, f => f.type.indexOf('image/') === 0);
+    if (!files.length || aeCvUploadTarget < 0) return;
+    uploadAeCvPhotos(files, aeCvUploadTarget, 0, files.length);
+  });
+
+  async function uploadAeCvPhotos(files, targetIndex, index, total) {
+    const progEl = document.querySelector(`[data-cv-progress="${targetIndex}"]`);
+    if (index >= total) {
+      if (progEl) { progEl.textContent = 'Fotos adicionadas!'; setTimeout(() => { if (progEl) progEl.textContent = ''; }, 2000); }
+      return;
+    }
+    const file = files[index];
+    if (progEl) progEl.textContent = `Enviando... ${index} de ${total}`;
+    if (file.size > 18 * 1024 * 1024) { uploadAeCvPhotos(files, targetIndex, index + 1, total); return; }
+    const dataUrl = await compressImageFile(file);
+    const r = await api('POST', '/api/admin/upload', { dataUrl, filename: file.name });
+    if (r.success && aeCvState[targetIndex]) {
+      aeCvState[targetIndex].images.push(r.url);
+      renderAeCv();
+    }
+    uploadAeCvPhotos(files, targetIndex, index + 1, total);
   }
 
   function renderImages(images) {
@@ -407,6 +550,14 @@
     v('ae-f-promo', p.isPromo);     v('ae-f-archived', p.archived);
     const delBtn = document.getElementById('ae-del');
     if (delBtn) delBtn.textContent = p.archived ? '↩ Restaurar' : '🗑 Arquivar';
+
+    aeCvState = Array.isArray(p.colorVariants)
+      ? p.colorVariants.map(cv => ({ name: cv.name || '', hex: cv.hex || '', images: Array.isArray(cv.images) ? cv.images.slice() : [], stock: cv.stock ?? 0, sku: cv.sku || '' }))
+      : [];
+    aeCvDefault = p.defaultColor || (aeCvState[0] ? aeCvState[0].name : '');
+    v('ae-f-has-colors', aeCvState.length > 0);
+    toggleAeCvBody();
+    renderAeCv();
   }
 
   async function openEditDrawer(pid) {
@@ -434,9 +585,11 @@
     // Reset to fields tab
     const fieldsTab = document.getElementById('ae-tab-edit');
     const imagesTab = document.getElementById('ae-tab-images');
+    const colorsTab = document.getElementById('ae-tab-colors');
     const histTab   = document.getElementById('ae-tab-history');
     if (fieldsTab) fieldsTab.style.display = 'block';
     if (imagesTab) imagesTab.style.display = 'none';
+    if (colorsTab) colorsTab.style.display = 'none';
     if (histTab)   histTab.style.display   = 'none';
     drawer.querySelectorAll('.ae-tab-btn').forEach(b => {
       b.style.color = b.dataset.tab === 'edit' ? '#fff' : 'rgba(255,255,255,.6)';
@@ -465,6 +618,16 @@
       isPromo: g('ae-f-promo'), archived: g('ae-f-archived'),
       images: productData.images || []
     };
+
+    if (g('ae-f-has-colors')) {
+      const named = aeCvState.filter(v => v.name.trim());
+      if (!named.length) { showToast('Adicione pelo menos uma cor na aba "Cores", ou desmarque "Este produto tem variações de cor?".', true); return; }
+      payload.colorVariants = named;
+      payload.defaultColor = named.some(v => v.name === aeCvDefault) ? aeCvDefault : named[0].name;
+    } else {
+      payload.colorVariants = [];
+      payload.defaultColor = '';
+    }
 
     const saveBtn = document.getElementById('ae-save');
     if (saveBtn) { saveBtn.textContent = '⏳ Salvando...'; saveBtn.disabled = true; }
@@ -618,6 +781,10 @@
     const prog = modal.querySelector('#ae-m-img-prog');
     if (preview) preview.style.display = 'none';
     if (prog) prog.textContent = '';
+    aeCvMState = [];
+    aeCvMDefault = '';
+    document.getElementById('ae-m-cv-body').style.display = 'none';
+    renderAeCvM();
     modal.style.display = 'flex';
   };
 
@@ -657,6 +824,17 @@
             </div>
             <label style="grid-column:1/-1;">${lbl('DESCRIÇÃO')}<textarea id="ae-m-desc" rows="3" style="${f('resize:vertical;')}" placeholder="Descrição..."></textarea></label>
           </div>
+
+          <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:12px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:8px;">
+              <input type="checkbox" id="ae-m-f-has-colors" style="width:15px;height:15px;cursor:pointer;"> Este produto tem variações de cor?
+            </label>
+            <div id="ae-m-cv-body" style="display:none;">
+              <div id="ae-m-cv-list"></div>
+              <button type="button" id="ae-m-cv-add-btn" style="${btn('#1d4ed8','#fff','width:100%;justify-content:center;margin-top:4px;')}">+ Adicionar cor</button>
+            </div>
+          </div>
+
           <div style="display:flex;gap:8px;margin-top:16px;">
             <button id="ae-m-save" style="${btn('#1d4ed8','#fff','flex:1;justify-content:center;')}">💾 Criar Produto</button>
             <button id="ae-m-cancel" style="${btn('#e2e8f0','#374151')}">Cancelar</button>
@@ -709,7 +887,128 @@
     });
     el.querySelector('#ae-m-id').addEventListener('input', function () { this._dirty = true; });
 
+    // Variações de cor
+    el.querySelector('#ae-m-f-has-colors').addEventListener('change', () => {
+      const on = document.getElementById('ae-m-f-has-colors').checked;
+      document.getElementById('ae-m-cv-body').style.display = on ? 'block' : 'none';
+      if (on && aeCvMState.length === 0) addAeCvM();
+    });
+    el.querySelector('#ae-m-cv-add-btn').addEventListener('click', addAeCvM);
+
     return el;
+  }
+
+  function addAeCvM() {
+    aeCvMState.push({ name: '', hex: '', images: [], stock: 0, sku: '' });
+    renderAeCvM();
+  }
+
+  function removeAeCvM(i) {
+    const removed = aeCvMState[i];
+    aeCvMState.splice(i, 1);
+    if (removed && removed.name === aeCvMDefault) aeCvMDefault = aeCvMState[0] ? aeCvMState[0].name : '';
+    renderAeCvM();
+  }
+
+  function moveAeCvM(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= aeCvMState.length) return;
+    const tmp = aeCvMState[i]; aeCvMState[i] = aeCvMState[j]; aeCvMState[j] = tmp;
+    renderAeCvM();
+  }
+
+  function renderAeCvM() {
+    const list = document.getElementById('ae-m-cv-list');
+    if (!list) return;
+    list.innerHTML = aeCvMState.map((v, i) => {
+      const isDefault = v.name && v.name === aeCvMDefault;
+      const photos = (v.images || []).map((url, pi) => `
+        <div style="position:relative;width:52px;">
+          ${pi === 0 ? `<span style="position:absolute;top:-5px;left:-5px;background:#f59e0b;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:4px;z-index:1;">★</span>` : ''}
+          <button type="button" data-mcv-photo-rm="${i}_${pi}" style="position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border:2px solid #fff;width:16px;height:16px;border-radius:50%;font-size:9px;cursor:pointer;line-height:1;">✕</button>
+          <img src="${url}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:2px solid ${pi===0?'#f59e0b':'#e2e8f0'};">
+        </div>`).join('');
+      return `
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;background:#f8fafc;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          ${v.hex ? `<span style="width:15px;height:15px;border-radius:50%;background:${v.hex};border:1px solid #e2e8f0;flex-shrink:0;"></span>` : ''}
+          <label style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:${isDefault?'#b45309':'#94a3b8'};cursor:pointer;">
+            <input type="radio" name="ae-m-cv-default-radio" data-mcv-default="${i}" ${isDefault?'checked':''}> ${isDefault?'★ Padrão':'Padrão'}
+          </label>
+          <span style="flex:1;"></span>
+          <button type="button" data-mcv-up="${i}" style="${btn('#f1f5f9','#374151','padding:3px 7px;font-size:10px;')}" ${i===0?'disabled':''}>↑</button>
+          <button type="button" data-mcv-dn="${i}" style="${btn('#f1f5f9','#374151','padding:3px 7px;font-size:10px;')}" ${i===aeCvMState.length-1?'disabled':''}>↓</button>
+          <button type="button" data-mcv-rm="${i}" style="${btn('#fef2f2','#dc2626','padding:3px 7px;font-size:10px;')}">🗑</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 60px;gap:6px;margin-bottom:8px;">
+          <input data-mcv-field="name" data-mcv-idx="${i}" value="${(v.name||'').replace(/"/g,'&quot;')}" style="${f()}" placeholder="Nome da cor (ex: Rosa)">
+          <input type="color" data-mcv-field="hex" data-mcv-idx="${i}" value="${v.hex||'#e8518a'}" style="${f('padding:2px;height:34px;')}">
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">${photos}
+          <button type="button" data-mcv-addphoto="${i}" style="width:52px;height:52px;border-radius:6px;border:2px dashed #cbd5e1;background:#fff;color:#94a3b8;font-size:16px;cursor:pointer;">+</button>
+        </div>
+        <div data-mcv-progress="${i}" style="font-size:10px;color:#64748b;min-height:13px;margin-bottom:6px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <input type="number" min="0" data-mcv-field="stock" data-mcv-idx="${i}" value="${v.stock??0}" style="${f()}" placeholder="Estoque">
+          <input data-mcv-field="sku" data-mcv-idx="${i}" value="${(v.sku||'').replace(/"/g,'&quot;')}" style="${f()}" placeholder="SKU (opcional)">
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-mcv-field]').forEach(el => {
+      el.addEventListener('input', () => {
+        const i = +el.getAttribute('data-mcv-idx');
+        const field = el.getAttribute('data-mcv-field');
+        const v = aeCvMState[i]; if (!v) return;
+        const wasDefault = v.name && v.name === aeCvMDefault;
+        v[field] = field === 'stock' ? (parseInt(el.value, 10) || 0) : el.value;
+        if (wasDefault) aeCvMDefault = v.name;
+      });
+    });
+    list.querySelectorAll('[data-mcv-default]').forEach(el => el.addEventListener('change', () => {
+      const i = +el.getAttribute('data-mcv-default');
+      aeCvMDefault = aeCvMState[i] ? aeCvMState[i].name : '';
+      renderAeCvM();
+    }));
+    list.querySelectorAll('[data-mcv-up]').forEach(el => el.addEventListener('click', () => moveAeCvM(+el.getAttribute('data-mcv-up'), -1)));
+    list.querySelectorAll('[data-mcv-dn]').forEach(el => el.addEventListener('click', () => moveAeCvM(+el.getAttribute('data-mcv-dn'), 1)));
+    list.querySelectorAll('[data-mcv-rm]').forEach(el => el.addEventListener('click', () => removeAeCvM(+el.getAttribute('data-mcv-rm'))));
+    list.querySelectorAll('[data-mcv-addphoto]').forEach(el => el.addEventListener('click', () => {
+      aeCvMUploadTarget = +el.getAttribute('data-mcv-addphoto');
+      aeCvMFileInput.value = '';
+      aeCvMFileInput.click();
+    }));
+    list.querySelectorAll('[data-mcv-photo-rm]').forEach(el => el.addEventListener('click', () => {
+      const [vi, pi] = el.getAttribute('data-mcv-photo-rm').split('_').map(Number);
+      if (aeCvMState[vi]) { aeCvMState[vi].images.splice(pi, 1); renderAeCvM(); }
+    }));
+  }
+
+  const aeCvMFileInput = document.createElement('input');
+  aeCvMFileInput.type = 'file'; aeCvMFileInput.accept = 'image/*'; aeCvMFileInput.multiple = true; aeCvMFileInput.style.display = 'none';
+  document.body.appendChild(aeCvMFileInput);
+  aeCvMFileInput.addEventListener('change', e => {
+    const files = Array.prototype.filter.call(e.target.files, f => f.type.indexOf('image/') === 0);
+    if (!files.length || aeCvMUploadTarget < 0) return;
+    uploadAeCvMPhotos(files, aeCvMUploadTarget, 0, files.length);
+  });
+
+  async function uploadAeCvMPhotos(files, targetIndex, index, total) {
+    const progEl = document.querySelector(`[data-mcv-progress="${targetIndex}"]`);
+    if (index >= total) {
+      if (progEl) { progEl.textContent = 'Fotos adicionadas!'; setTimeout(() => { if (progEl) progEl.textContent = ''; }, 2000); }
+      return;
+    }
+    const file = files[index];
+    if (progEl) progEl.textContent = `Enviando... ${index} de ${total}`;
+    if (file.size > 18 * 1024 * 1024) { uploadAeCvMPhotos(files, targetIndex, index + 1, total); return; }
+    const dataUrl = await compressImageFile(file);
+    const r = await api('POST', '/api/admin/upload', { dataUrl, filename: file.name });
+    if (r.success && aeCvMState[targetIndex]) {
+      aeCvMState[targetIndex].images.push(r.url);
+      renderAeCvM();
+    }
+    uploadAeCvMPhotos(files, targetIndex, index + 1, total);
   }
 
   async function createProduct(el) {
@@ -721,17 +1020,28 @@
     if (!name) return showToast('Nome é obrigatório.', true);
     if (!id)   return showToast('ID é obrigatório.', true);
 
+    if (el.querySelector('#ae-m-f-has-colors').checked && !aeCvMState.some(v => v.name.trim())) {
+      return showToast('Adicione pelo menos uma cor, ou desmarque "Este produto tem variações de cor?".', true);
+    }
+
     const saveBtn = el.querySelector('#ae-m-save');
     saveBtn.textContent = '⏳ Criando...'; saveBtn.disabled = true;
 
-    const r = await api('POST', `/api/admin/catalog/${catalog}`, {
+    const payload = {
       id, name, price, priceOriginal: price,
       model: g('ae-m-model'), color: g('ae-m-color'),
       storage: g('ae-m-storage'), stock: parseInt(g('ae-m-stock')) || 1,
       condition: g('ae-m-condition'), description: g('ae-m-desc'),
       images: newProductUploadedUrl ? [newProductUploadedUrl] : (g('ae-m-img') ? [g('ae-m-img')] : []),
       isNew: g('ae-m-condition') === 'Novo', rating: 5.0, reviews: 0
-    });
+    };
+    if (el.querySelector('#ae-m-f-has-colors').checked) {
+      const named = aeCvMState.filter(v => v.name.trim());
+      payload.colorVariants = named;
+      payload.defaultColor = named.some(v => v.name === aeCvMDefault) ? aeCvMDefault : named[0].name;
+    }
+
+    const r = await api('POST', `/api/admin/catalog/${catalog}`, payload);
 
     saveBtn.textContent = '💾 Criar Produto'; saveBtn.disabled = false;
 

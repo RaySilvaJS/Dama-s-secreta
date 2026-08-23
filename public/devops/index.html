@@ -2019,6 +2019,19 @@ tbody tr:last-child td { border-bottom: none; }
               <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Descrição</label>
               <textarea id="prod-desc" class="input" rows="3" style="width:100%;resize:vertical" placeholder="Descrição do produto..."></textarea>
             </div>
+
+            <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text)">
+                <input type="checkbox" id="prod-has-colors" style="width:15px;height:15px;cursor:pointer">
+                Este produto tem variações de cor?
+              </label>
+              <div id="prod-cv-body" style="display:none;margin-top:10px">
+                <div id="prod-cv-list"></div>
+                <button type="button" class="btn btn-ghost" id="prod-cv-add-btn" style="width:100%;margin-top:4px">+ Adicionar cor</button>
+                <div style="font-size:11px;color:var(--muted);margin-top:6px">A primeira foto de cada cor é a principal dela. Marque uma cor como "Padrão".</div>
+              </div>
+            </div>
+
             <div style="display:flex;gap:8px">
               <button class="btn btn-blue" id="prod-save-btn" onclick="saveProduto()">Adicionar Produto</button>
               <button class="btn btn-ghost" id="prod-cancel-btn" onclick="resetProdutoForm()" style="display:none">Cancelar</button>
@@ -5788,6 +5801,163 @@ async function finResend(id) {
 // ═══════════════════════════════════════════════
 const fmtBRL2 = (v) => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 
+// ═══════════════════════════════════════════════
+// VARIAÇÕES DE COR (produto único, várias cores — não cria produto por cor)
+// ═══════════════════════════════════════════════
+let prodCvState = [];
+let prodCvDefault = '';
+let prodCvUploadTarget = -1;
+const prodCvFileInput = document.createElement('input');
+prodCvFileInput.type = 'file'; prodCvFileInput.accept = 'image/*'; prodCvFileInput.multiple = true; prodCvFileInput.style.display = 'none';
+document.body.appendChild(prodCvFileInput);
+
+function compressImageFileDv(file, maxDim, quality) {
+  maxDim = maxDim || 1600; quality = quality || 0.82;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = () => {
+      const original = reader.result;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+          const cw = Math.max(1, Math.round(img.naturalWidth * scale));
+          const ch = Math.max(1, Math.round(img.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = cw; canvas.height = ch;
+          canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          const out = canvas.toDataURL('image/jpeg', quality);
+          resolve(out && out.length > 100 ? out : original);
+        } catch (e) { resolve(original); }
+      };
+      img.onerror = () => resolve(original);
+      img.src = original;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function toggleProdCvBody() {
+  const on = document.getElementById('prod-has-colors').checked;
+  document.getElementById('prod-cv-body').style.display = on ? 'block' : 'none';
+  if (on && prodCvState.length === 0) addProdCv();
+}
+
+function addProdCv() {
+  prodCvState.push({ name: '', hex: '', images: [], stock: 0, sku: '' });
+  renderProdCv();
+}
+
+function removeProdCv(i) {
+  const removed = prodCvState[i];
+  prodCvState.splice(i, 1);
+  if (removed && removed.name === prodCvDefault) prodCvDefault = prodCvState[0] ? prodCvState[0].name : '';
+  renderProdCv();
+}
+
+function moveProdCv(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= prodCvState.length) return;
+  const tmp = prodCvState[i]; prodCvState[i] = prodCvState[j]; prodCvState[j] = tmp;
+  renderProdCv();
+}
+
+function renderProdCv() {
+  const list = document.getElementById('prod-cv-list');
+  list.innerHTML = prodCvState.map((v, i) => {
+    const isDefault = v.name && v.name === prodCvDefault;
+    const photos = v.images.map((url, pi) => `
+      <div style="position:relative;width:56px">
+        ${pi === 0 ? `<span style="position:absolute;top:-5px;left:-5px;background:var(--yellow);color:#000;font-size:8px;font-weight:800;padding:1px 4px;border-radius:4px;z-index:1">★</span>` : ''}
+        <button type="button" data-cv-photo-rm="${i}_${pi}" style="position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border:2px solid var(--bg2);width:16px;height:16px;border-radius:50%;font-size:9px;cursor:pointer;line-height:1">✕</button>
+        <img src="${url}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid ${pi===0?'var(--yellow)':'var(--border)'}">
+      </div>`).join('');
+    return `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg2)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        ${v.hex ? `<span style="width:16px;height:16px;border-radius:50%;background:${esc(v.hex)};border:1px solid var(--border);flex-shrink:0"></span>` : ''}
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${isDefault?'var(--yellow)':'var(--muted)'};cursor:pointer">
+          <input type="radio" name="prod-cv-default-radio" data-cv-default="${i}" ${isDefault?'checked':''}> ${isDefault?'★ Padrão':'Padrão'}
+        </label>
+        <span style="flex:1"></span>
+        <button type="button" data-cv-up="${i}" class="btn btn-ghost" style="padding:3px 8px;font-size:11px" ${i===0?'disabled':''}>↑</button>
+        <button type="button" data-cv-dn="${i}" class="btn btn-ghost" style="padding:3px 8px;font-size:11px" ${i===prodCvState.length-1?'disabled':''}>↓</button>
+        <button type="button" data-cv-rm="${i}" class="btn btn-red" style="padding:3px 8px;font-size:11px">🗑</button>
+      </div>
+      <div class="grid-2" style="gap:8px;margin-bottom:8px">
+        <input class="input" data-cv-field="name" data-cv-idx="${i}" value="${esc(v.name)}" placeholder="Nome da cor (ex: Rosa)">
+        <input type="color" class="input" data-cv-field="hex" data-cv-idx="${i}" value="${v.hex||'#E8518A'}" style="padding:2px;height:36px">
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${photos}
+        <button type="button" data-cv-addphoto="${i}" style="width:56px;height:56px;border-radius:6px;border:2px dashed var(--border);background:transparent;color:var(--muted);font-size:18px;cursor:pointer">+</button>
+      </div>
+      <div data-cv-progress="${i}" style="font-size:11px;color:var(--muted);min-height:14px;margin-bottom:6px"></div>
+      <div class="grid-2" style="gap:8px">
+        <input type="number" min="0" class="input" data-cv-field="stock" data-cv-idx="${i}" value="${v.stock??0}" placeholder="Estoque">
+        <input class="input" data-cv-field="sku" data-cv-idx="${i}" value="${esc(v.sku)}" placeholder="SKU (opcional)">
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-cv-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      const i = +el.getAttribute('data-cv-idx');
+      const field = el.getAttribute('data-cv-field');
+      const v = prodCvState[i]; if (!v) return;
+      const wasDefault = v.name && v.name === prodCvDefault;
+      v[field] = field === 'stock' ? (parseInt(el.value, 10) || 0) : el.value;
+      if (wasDefault) prodCvDefault = v.name;
+    });
+  });
+  list.querySelectorAll('[data-cv-default]').forEach(el => el.addEventListener('change', () => {
+    const i = +el.getAttribute('data-cv-default');
+    prodCvDefault = prodCvState[i] ? prodCvState[i].name : '';
+    renderProdCv();
+  }));
+  list.querySelectorAll('[data-cv-up]').forEach(el => el.addEventListener('click', () => moveProdCv(+el.getAttribute('data-cv-up'), -1)));
+  list.querySelectorAll('[data-cv-dn]').forEach(el => el.addEventListener('click', () => moveProdCv(+el.getAttribute('data-cv-dn'), 1)));
+  list.querySelectorAll('[data-cv-rm]').forEach(el => el.addEventListener('click', () => removeProdCv(+el.getAttribute('data-cv-rm'))));
+  list.querySelectorAll('[data-cv-addphoto]').forEach(el => el.addEventListener('click', () => {
+    prodCvUploadTarget = +el.getAttribute('data-cv-addphoto');
+    prodCvFileInput.value = '';
+    prodCvFileInput.click();
+  }));
+  list.querySelectorAll('[data-cv-photo-rm]').forEach(el => el.addEventListener('click', () => {
+    const [vi, pi] = el.getAttribute('data-cv-photo-rm').split('_').map(Number);
+    if (prodCvState[vi]) { prodCvState[vi].images.splice(pi, 1); renderProdCv(); }
+  }));
+}
+
+prodCvFileInput.addEventListener('change', (e) => {
+  const files = Array.prototype.filter.call(e.target.files, f => f.type.indexOf('image/') === 0);
+  if (!files.length || prodCvUploadTarget < 0) return;
+  uploadProdCvPhotos(files, prodCvUploadTarget, 0, files.length);
+});
+
+async function uploadProdCvPhotos(files, targetIndex, index, total) {
+  const progEl = document.querySelector(`[data-cv-progress="${targetIndex}"]`);
+  if (index >= total) {
+    if (progEl) { progEl.textContent = 'Fotos adicionadas!'; setTimeout(() => { if (progEl) progEl.textContent = ''; }, 2000); }
+    return;
+  }
+  const file = files[index];
+  if (progEl) progEl.textContent = `Enviando fotos... ${index} de ${total}`;
+  if (file.size > 18 * 1024 * 1024) { uploadProdCvPhotos(files, targetIndex, index + 1, total); return; }
+  try {
+    const dataUrl = await compressImageFileDv(file);
+    const r = await api.post('/api/admin/upload', { dataUrl, filename: file.name });
+    if (r && r.success && prodCvState[targetIndex]) {
+      prodCvState[targetIndex].images.push(r.url);
+      renderProdCv();
+    }
+  } catch (e) {}
+  uploadProdCvPhotos(files, targetIndex, index + 1, total);
+}
+
+document.getElementById('prod-has-colors').addEventListener('change', toggleProdCvBody);
+document.getElementById('prod-cv-add-btn').addEventListener('click', addProdCv);
+
 async function loadProdutos() {
   const el = document.getElementById('prod-list');
   if (!el) return;
@@ -5838,6 +6008,14 @@ async function editProduto(id) {
   document.getElementById('prod-form-title').textContent = 'Editar Produto';
   document.getElementById('prod-save-btn').textContent  = 'Salvar Alterações';
   document.getElementById('prod-cancel-btn').style.display = '';
+
+  prodCvState = Array.isArray(p.colorVariants)
+    ? p.colorVariants.map(v => ({ name: v.name || '', hex: v.hex || '', images: Array.isArray(v.images) ? v.images.slice() : [], stock: v.stock ?? 0, sku: v.sku || '' }))
+    : [];
+  prodCvDefault = p.defaultColor || (prodCvState[0] ? prodCvState[0].name : '');
+  document.getElementById('prod-has-colors').checked = prodCvState.length > 0;
+  toggleProdCvBody();
+  renderProdCv();
 }
 
 function resetProdutoForm() {
@@ -5854,6 +6032,12 @@ function resetProdutoForm() {
   document.getElementById('prod-cancel-btn').style.display = 'none';
   const fb = document.getElementById('prod-feedback');
   if (fb) fb.style.display = 'none';
+
+  prodCvState = [];
+  prodCvDefault = '';
+  document.getElementById('prod-has-colors').checked = false;
+  toggleProdCvBody();
+  renderProdCv();
 }
 
 async function saveProduto() {
@@ -5881,6 +6065,16 @@ async function saveProduto() {
   const url    = editId ? `/api/admin/product/${editId}` : '/api/admin/product';
   const payload = { id, name, model, price, condition: document.getElementById('prod-condition').value, color, stock, storage, description: desc, specs: { Material: material, Tamanho: storage, Marca: brand } };
   if (imageUrls.length) payload.images = imageUrls;
+
+  if (document.getElementById('prod-has-colors').checked) {
+    const named = prodCvState.filter(v => v.name.trim());
+    if (!named.length) { showProdFeedback('Adicione pelo menos uma cor, ou desmarque "Este produto tem variações de cor?".', false); btn.disabled = false; btn.textContent = editId ? 'Salvar Alterações' : 'Adicionar Produto'; return; }
+    payload.colorVariants = named;
+    payload.defaultColor = named.some(v => v.name === prodCvDefault) ? prodCvDefault : named[0].name;
+  } else {
+    payload.colorVariants = [];
+    payload.defaultColor = '';
+  }
 
   try {
     const r = await api.call(method, url, payload);

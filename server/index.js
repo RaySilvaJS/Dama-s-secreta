@@ -460,7 +460,7 @@ app.use('/api/webhooks/mercado-pago', mercadoPagoWebhookRouter);
 // Rotas Administrativas - Movidas para cima para garantir prioridade
 app.post('/api/admin/product', requireAdmin, (req, res) => {
   const products = loadProducts();
-  const { id, name, model, price, condition, color, stock, storage, images, specs, description } = req.body;
+  const { id, name, model, price, condition, color, stock, storage, images, specs, description, category, colorVariants, defaultColor } = req.body;
   if (!id || !name) {
     return res.status(400).json({ error: 'ID e nome são obrigatórios' });
   }
@@ -488,6 +488,9 @@ app.post('/api/admin/product', requireAdmin, (req, res) => {
     priceOriginal: Number(price),
     promoPercent: 0
   };
+  if (category) newProduct.category = category;
+  if (Array.isArray(colorVariants) && colorVariants.length) newProduct.colorVariants = colorVariants;
+  if (defaultColor) newProduct.defaultColor = defaultColor;
   products.push(newProduct);
   saveProducts(products);
   res.json({ success: true, product: newProduct });
@@ -501,7 +504,7 @@ app.put('/api/admin/product/:id', requireAdmin, (req, res) => {
     return res.status(404).json({ error: 'Produto não encontrado no banco de dados' });
   }
 
-  const { name, model, price, condition, color, stock, storage, images, specs, description } = req.body;
+  const { name, model, price, condition, color, stock, storage, images, specs, description, category, colorVariants, defaultColor } = req.body;
 
   const updatedProduct = {
     ...products[index],
@@ -521,6 +524,9 @@ app.put('/api/admin/product/:id', requireAdmin, (req, res) => {
   if (images && images.length > 0) {
     updatedProduct.images = images;
   }
+  if (category !== undefined) updatedProduct.category = category;
+  if (colorVariants !== undefined) updatedProduct.colorVariants = colorVariants;
+  if (defaultColor !== undefined) updatedProduct.defaultColor = defaultColor;
 
   products[index] = updatedProduct;
   saveProducts(products);
