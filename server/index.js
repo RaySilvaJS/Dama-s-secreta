@@ -23,7 +23,7 @@ const mercadoPagoOrdersRouter = require('./mercadoPagoOrders');
 const mercadoPagoWebhookRouter = require('./mercadoPagoWebhook');
 const adminRouter = require('./admin');
 const seoRouter = require('./seo');
-const { loadConfig, loadSecurity, saveSecurity } = require('./admin');
+const { loadConfig, loadSecurity, saveSecurity, getMelhorEnvioAccessToken, exchangeMeCode } = require('./admin');
 const { initWhatsApp, sendPaymentRequest } = require('./whatsapp');
 const { v4: uuidv4 } = require('uuid');
 const tracker = require('./tracker');
@@ -399,6 +399,19 @@ app.use('/api/admin', adminRouter);
 
 // Devops panel route
 app.get('/devops', (req, res) => res.sendFile(path.join(publicPath, 'devops', 'index.html')));
+
+// Callback do OAuth da Melhor Envio — a Melhor Envio redireciona o navegador da admin pra cá
+// depois que ela clica "Autorizar" no site deles. É pública (sem X-Admin-Token) porque é uma
+// navegação normal do navegador, não uma chamada de API; a segurança vem do "state" único
+// gerado em /api/admin/melhorenvio/connect e conferido em exchangeMeCode.
+app.get('/api/melhorenvio/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error || !code) {
+    return res.redirect('/devops?me=error');
+  }
+  const result = await exchangeMeCode(code, state);
+  res.redirect(result.ok ? '/devops?me=connected' : '/devops?me=error');
+});
 
 // Painel administrativo simplificado de produtos (estilo Mercado Livre) — mesma autenticação do /devops
 app.get('/admin/produtos', (req, res) => res.sendFile(path.join(publicPath, 'admin-produtos.html')));
@@ -1304,9 +1317,11 @@ app.post('/api/shipping', async (req, res) => {
   const { cep, subtotal, width = 20, height = 5, length = 15, weight = 0.8 } = req.body || {};
   if (!cep) return res.status(400).json({ error: 'CEP é obrigatório' });
 
-  const MELHOR_ENVIO_TOKEN = process.env.MELHOR_ENVIO_TOKEN;
+  // Token vem da conexão OAuth feita em /devops (renovado automaticamente); se nunca conectou,
+  // cai pro MELHOR_ENVIO_TOKEN fixo do .env (compatibilidade com configuração manual antiga).
+  const MELHOR_ENVIO_TOKEN = await getMelhorEnvioAccessToken();
   if (!MELHOR_ENVIO_TOKEN) {
-    return res.status(500).json({ error: 'MELHOR_ENVIO_TOKEN não está configurado no servidor' });
+    return res.status(500).json({ error: 'Melhor Envio não está conectado. Conecte em /devops → Financeiro.' });
   }
 
   // Origem (loja) - configure via env ORIGIN_CEP se necessário

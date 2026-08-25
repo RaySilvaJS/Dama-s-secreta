@@ -1307,6 +1307,35 @@ tbody tr:last-child td { border-bottom: none; }
         <div id="mp-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
       </div>
 
+      <!-- Config Melhor Envio (frete real — Correios + outras transportadoras) -->
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+          <h3 style="margin:0">🚚 Melhor Envio — Frete (Correios e outras)</h3>
+          <span id="me-status-badge" class="badge badge-yellow">Verificando...</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+          Calcula o frete real no checkout pelo CEP, incluindo Correios PAC/SEDEX. Cadastre um
+          aplicativo em <a href="https://melhorenvio.com.br" target="_blank" rel="noopener">melhorenvio.com.br</a>
+          → Área do desenvolvedor → Cadastrar novo aplicativo, usando esta URL de redirecionamento:
+        </p>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;font-family:monospace;margin-bottom:12px;word-break:break-all" id="me-callback-url">—</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Client ID</label>
+            <input id="me-client-id" type="text" class="input" style="width:100%" placeholder="Do app cadastrado na Melhor Envio" autocomplete="off"/>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Client Secret</label>
+            <input id="me-client-secret" type="password" class="input" style="width:100%" placeholder="Do app cadastrado na Melhor Envio" autocomplete="off"/>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-blue" onclick="saveMeCfg()">💾 Salvar Client ID/Secret</button>
+          <button class="btn btn-green" onclick="connectMe()">🔗 Conectar com Melhor Envio</button>
+        </div>
+        <div id="me-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
+      </div>
+
       <!-- Gerador de QR Code PIX de Teste -->
       <div class="card" style="margin-bottom:20px">
         <h3>🧪 Gerar QR Code PIX de Teste</h3>
@@ -5264,7 +5293,7 @@ async function init() {
 let _finRefusingId = null;
 
 async function loadFinanceiro() {
-  await Promise.all([loadFinDashboard(), loadFinOrders(), loadPixCfgForm(), loadMpCfgForm()]);
+  await Promise.all([loadFinDashboard(), loadFinOrders(), loadPixCfgForm(), loadMpCfgForm(), loadMeCfgForm()]);
 }
 
 async function loadFinDashboard() {
@@ -5464,6 +5493,72 @@ async function saveMpCfg() {
     if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
   }
 }
+
+// ── Configuração Melhor Envio (Frete) ────────────────────────────────────────
+async function loadMeCfgForm() {
+  try {
+    const data = await api.get('/api/admin/melhorenvio/config');
+    if (!data) return;
+    const idEl = document.getElementById('me-client-id');
+    if (idEl && data.clientId) idEl.value = data.clientId;
+
+    const cbEl = document.getElementById('me-callback-url');
+    if (cbEl) cbEl.textContent = data.appUrlSet ? data.callbackUrl : 'Configure APP_URL no .env para gerar esta URL';
+
+    const badge = document.getElementById('me-status-badge');
+    if (badge) {
+      badge.textContent = data.connected ? '✓ Conectado' : '⚠ Não conectado';
+      badge.className = 'badge ' + (data.connected ? 'badge-green' : 'badge-yellow');
+    }
+  } catch {}
+}
+
+async function saveMeCfg() {
+  const clientId     = document.getElementById('me-client-id')?.value.trim();
+  const clientSecret = document.getElementById('me-client-secret')?.value.trim();
+  const fb = document.getElementById('me-cfg-feedback');
+  try {
+    const r = await api.post('/api/admin/melhorenvio/config', { clientId, clientSecret });
+    if (fb) {
+      fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
+      fb.textContent  = r?.ok ? '✓ Salvo! Agora clique em "Conectar com Melhor Envio".' : (r?.error || 'Erro ao salvar.');
+      fb.style.display = '';
+      setTimeout(() => { if (fb) fb.style.display = 'none'; }, 5000);
+    }
+    await loadMeCfgForm();
+  } catch(e) {
+    if (fb) { fb.style.color='var(--red)'; fb.textContent='Erro: ' + e.message; fb.style.display=''; }
+  }
+}
+
+async function connectMe() {
+  const fb = document.getElementById('me-cfg-feedback');
+  const r = await api.get('/api/admin/melhorenvio/connect');
+  if (r?.ok && r.url) {
+    window.location.href = r.url;
+  } else if (fb) {
+    fb.style.color = 'var(--red)';
+    fb.textContent = r?.error || 'Não foi possível iniciar a conexão.';
+    fb.style.display = '';
+  }
+}
+
+// Depois de voltar do fluxo de autorização da Melhor Envio (?me=connected|error na URL)
+(function checkMeCallbackFeedback() {
+  const params = new URLSearchParams(window.location.search);
+  const me = params.get('me');
+  if (!me) return;
+  window.history.replaceState({}, '', window.location.pathname);
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const fb = document.getElementById('me-cfg-feedback');
+      if (!fb) return;
+      fb.style.color = me === 'connected' ? 'var(--green)' : 'var(--red)';
+      fb.textContent = me === 'connected' ? '✓ Conectado com a Melhor Envio com sucesso!' : 'Falha ao conectar. Confira o Client ID/Secret e tente de novo.';
+      fb.style.display = '';
+    }, 1200);
+  });
+})();
 
 // ── Configuração SMTP (Recuperação de Senha) ────────────────────────────────
 async function loadSmtpCfgForm() {

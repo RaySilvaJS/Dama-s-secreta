@@ -13,6 +13,7 @@ const { sendToClient, getGroupId, setGroupId } = require('./whatsapp');
 const telegram = require('./telegram');
 const mercadopago = require('./mercadopago');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 const ROOT = path.join(__dirname, '..');
 const DATA = path.join(__dirname, 'data');
@@ -1084,6 +1085,140 @@ router.post('/smtp-test', adminAuth, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── MELHOR ENVIO (frete real — Correios PAC/SEDEX + outras transportadoras) ─
+// Fluxo OAuth2: https://docs.melhorenvio.com.br/reference/fluxo-de-autorização
+// ════════════════════════════════════════════════════════════════════════════
+
+const ME_BASE = () => process.env.MELHOR_ENVIO_API_BASE || 'https://melhorenvio.com.br';
+const ME_CALLBACK_URL = () => {
+  const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+  return `${appUrl}/api/melhorenvio/callback`;
+};
+const ME_CONTACT_EMAIL = () => {
+  const fromMatch = (process.env.MAIL_FROM || '').match(/<([^>]+)>/);
+  return fromMatch?.[1] || process.env.MAIL_FROM || 'contato@damassecreta.com';
+};
+
+const getMeConfig = () => (loadConfig().meConfig) || {};
+const saveMeConfig = (partial) => {
+  const cfg = loadConfig();
+  cfg.meConfig = { ...(cfg.meConfig || {}), ...partial };
+  saveConfig(cfg);
+  return cfg.meConfig;
+};
+
+// Troca refresh_token por um access_token novo quando o atual está perto de expirar.
+async function refreshMeToken(me) {
+  const resp = await axios.post(`${ME_BASE()}/oauth/token`, {
+    grant_type: 'refresh_token',
+    client_id: me.clientId,
+    client_secret: me.clientSecret,
+    refresh_token: me.refreshToken,
+  }, { headers: { Accept: 'application/json' }, timeout: 15000 });
+  const { access_token, refresh_token, expires_in } = resp.data || {};
+  return saveMeConfig({
+    accessToken: access_token,
+    refreshToken: refresh_token || me.refreshToken,
+    expiresAt: Date.now() + (Number(expires_in) || 2591000) * 1000,
+  });
+}
+
+// Usado por /api/shipping — devolve um access_token válido (renovando se preciso).
+// Se não houver conexão OAuth feita ainda, cai pro MELHOR_ENVIO_TOKEN estático do .env
+// (compatibilidade com quem já tinha um token fixo configurado antes deste fluxo existir).
+async function getMelhorEnvioAccessToken() {
+  const me = getMeConfig();
+  if (!me.accessToken) return process.env.MELHOR_ENVIO_TOKEN || null;
+  const expiringSoon = !me.expiresAt || (me.expiresAt - Date.now()) < 5 * 60 * 1000;
+  if (expiringSoon && me.refreshToken && me.clientId && me.clientSecret) {
+    try {
+      const updated = await refreshMeToken(me);
+      return updated.accessToken;
+    } catch (e) {
+      console.error('[MELHOR-ENVIO] Falha ao renovar token:', e.response?.data || e.message);
+      return me.accessToken; // tenta com o antigo — melhor que nada
+    }
+  }
+  return me.accessToken;
+}
+
+router.get('/melhorenvio/config', adminAuth, (req, res) => {
+  const me = getMeConfig();
+  res.json({
+    clientId: me.clientId || '',
+    connected: !!me.accessToken,
+    connectedAt: me.connectedAt || null,
+    callbackUrl: ME_CALLBACK_URL(),
+    appUrlSet: !!process.env.APP_URL,
+  });
+});
+
+router.post('/melhorenvio/config', adminAuth, (req, res) => {
+  const { clientId, clientSecret } = req.body || {};
+  if (!clientId || !clientSecret) {
+    return res.status(400).json({ ok: false, error: 'Client ID e Client Secret são obrigatórios.' });
+  }
+  saveMeConfig({ clientId: String(clientId).trim(), clientSecret: String(clientSecret).trim() });
+  audit.append('melhorenvio_config_updated', req.adminUser?.email || 'devops', req.ip, { clientId });
+  res.json({ ok: true });
+});
+
+router.get('/melhorenvio/connect', adminAuth, (req, res) => {
+  const me = getMeConfig();
+  if (!me.clientId || !me.clientSecret) {
+    return res.status(400).json({ ok: false, error: 'Salve o Client ID e Client Secret antes de conectar.' });
+  }
+  if (!process.env.APP_URL) {
+    return res.status(400).json({ ok: false, error: 'APP_URL não está configurada no .env — necessária para montar a URL de redirecionamento.' });
+  }
+  const state = uuidv4();
+  saveMeConfig({ pendingState: state });
+  const params = new URLSearchParams({
+    client_id: me.clientId,
+    redirect_uri: ME_CALLBACK_URL(),
+    response_type: 'code',
+    state,
+    scope: 'shipping-calculate',
+  });
+  res.json({ ok: true, url: `${ME_BASE()}/oauth/authorize?${params.toString()}` });
+});
+
+// Callback fica em server/index.js (rota pública /api/melhorenvio/callback — a Melhor Envio
+// redireciona o navegador da admin de volta pra cá, sem os headers de autenticação do painel).
+async function exchangeMeCode(code, state) {
+  const me = getMeConfig();
+  if (!state || state !== me.pendingState) {
+    return { ok: false, error: 'Estado inválido (possível uso repetido do link ou expirado). Tente conectar de novo.' };
+  }
+  if (!me.clientId || !me.clientSecret) {
+    return { ok: false, error: 'Client ID/Secret não configurados.' };
+  }
+  try {
+    const resp = await axios.post(`${ME_BASE()}/oauth/token`, {
+      grant_type: 'authorization_code',
+      client_id: me.clientId,
+      client_secret: me.clientSecret,
+      redirect_uri: ME_CALLBACK_URL(),
+      code,
+    }, { headers: { Accept: 'application/json' }, timeout: 15000 });
+    const { access_token, refresh_token, expires_in } = resp.data || {};
+    if (!access_token) return { ok: false, error: 'Resposta inesperada da Melhor Envio ao trocar o código.' };
+    saveMeConfig({
+      accessToken: access_token,
+      refreshToken: refresh_token || null,
+      expiresAt: Date.now() + (Number(expires_in) || 2591000) * 1000,
+      connectedAt: new Date().toISOString(),
+      pendingState: null,
+    });
+    audit.append('melhorenvio_connected', 'devops', null, {});
+    return { ok: true };
+  } catch (e) {
+    console.error('[MELHOR-ENVIO] Falha ao trocar código por token:', e.response?.data || e.message);
+    return { ok: false, error: 'Falha ao concluir a conexão com a Melhor Envio.' };
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // ── SITE CONFIG (marca: nome, WhatsApp, Instagram, logo) ───────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1681,3 +1816,5 @@ module.exports = router;
 module.exports.loadConfig = loadConfig;
 module.exports.loadSecurity = loadSecurity;
 module.exports.saveSecurity = saveSecurity;
+module.exports.getMelhorEnvioAccessToken = getMelhorEnvioAccessToken;
+module.exports.exchangeMeCode = exchangeMeCode;
