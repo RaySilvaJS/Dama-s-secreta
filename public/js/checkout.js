@@ -192,65 +192,96 @@ document.addEventListener('DOMContentLoaded', () => {
     return d;
   }
 
+  // Debounce do CEP: evita disparar ViaCEP + cálculo de frete a cada tecla —
+  // só dispara ~500ms depois que o cliente para de digitar. O "seq" descarta
+  // respostas de requisições antigas caso o cliente corrija o CEP no meio do caminho.
+  let cepDebounceTimer = null;
+  let cepReqSeq = 0;
+
   function setupCepAutoFill() {
     const cepInput = $('addr-cep');
     const spinner  = $('addr-cep-spinner');
     if (!cepInput) return;
 
-    cepInput.addEventListener('input', async (e) => {
+    cepInput.addEventListener('input', (e) => {
       let v = e.target.value.replace(/\D/g, '');
       if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5, 8);
       e.target.value = v;
 
       const digits = v.replace(/\D/g, '');
-      if (digits.length < 8) { clearAddrAutoFields(); return; }
+      clearTimeout(cepDebounceTimer);
+      cepReqSeq++;
+
+      if (digits.length < 8) {
+        clearAddrAutoFields();
+        if (spinner) spinner.classList.remove('active');
+        shippingData = null;
+        shipResults.innerHTML = '<p class="co-muted">Informe o endereço acima para ver as opções de envio.</p>';
+        updateTotal();
+        return;
+      }
 
       spinner.classList.add('active');
       clearAddrAutoFields();
+      shipResults.innerHTML = '<p class="co-muted"><span class="co-spinner dark" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px;"></span>Calculando frete...</p>';
 
-      try {
-        const d = await lookupCep(digits);
-        if (!d || d.erro) {
-          if (spinner) spinner.classList.remove('active');
-          ['addr-rua', 'addr-bairro', 'addr-cidade', 'addr-estado'].forEach(id => {
-            const el = $(id);
-            if (el) el.placeholder = 'CEP não encontrado';
-          });
-          return;
-        }
+      const mySeq = cepReqSeq;
+      cepDebounceTimer = setTimeout(async () => {
+        try {
+          const d = await lookupCep(digits);
+          if (mySeq !== cepReqSeq) return; // CEP mudou enquanto a busca rodava — descarta
 
-        setAddrField('addr-rua',    d.logradouro || '');
-        setAddrField('addr-bairro', d.bairro     || '');
-        setAddrField('addr-cidade', d.localidade || '');
-        setAddrField('addr-estado', d.uf         || '');
-
-        // Se rua estiver vazia (CEP de localidade), libera para digitação
-        if (!d.logradouro) {
-          const ruaEl = $('addr-rua');
-          if (ruaEl) {
-            ruaEl.readOnly = false;
-            ruaEl.placeholder = 'Digite a rua';
-            ruaEl.classList.remove('co-field-ok');
+          if (!d || d.erro) {
+            ['addr-rua', 'addr-bairro', 'addr-cidade', 'addr-estado'].forEach(id => {
+              const el = $(id);
+              if (el) el.placeholder = 'CEP não encontrado';
+            });
+            shipResults.innerHTML = '<p class="co-muted" style="color:#DC2626">CEP não encontrado. Verifique e tente novamente.</p>';
+            shippingData = null;
+            updateTotal();
+            return;
           }
-        }
-        if (!d.bairro) {
-          const bairroEl = $('addr-bairro');
-          if (bairroEl) {
-            bairroEl.readOnly = false;
-            bairroEl.placeholder = 'Digite o bairro';
-            bairroEl.classList.remove('co-field-ok');
+
+          setAddrField('addr-rua',    d.logradouro || '');
+          setAddrField('addr-bairro', d.bairro     || '');
+          setAddrField('addr-cidade', d.localidade || '');
+          setAddrField('addr-estado', d.uf         || '');
+
+          // Se rua estiver vazia (CEP de localidade), libera para digitação
+          if (!d.logradouro) {
+            const ruaEl = $('addr-rua');
+            if (ruaEl) {
+              ruaEl.readOnly = false;
+              ruaEl.placeholder = 'Digite a rua';
+              ruaEl.classList.remove('co-field-ok');
+            }
           }
+          if (!d.bairro) {
+            const bairroEl = $('addr-bairro');
+            if (bairroEl) {
+              bairroEl.readOnly = false;
+              bairroEl.placeholder = 'Digite o bairro';
+              bairroEl.classList.remove('co-field-ok');
+            }
+          }
+
+          // Focus no número após preencher
+          const numEl = $('addr-numero');
+          if (numEl) setTimeout(() => numEl.focus(), 100);
+
+          // CEP válido — calcula o frete automaticamente, sem precisar clicar em nada
+          await calcFreteFromCep(digits);
+
+        } catch {
+          if (mySeq !== cepReqSeq) return;
+          clearAddrAutoFields();
+          shipResults.innerHTML = '<p class="co-muted" style="color:#DC2626">Não foi possível calcular o frete agora. Tente novamente.</p>';
+          shippingData = null;
+          updateTotal();
+        } finally {
+          if (mySeq === cepReqSeq && spinner) spinner.classList.remove('active');
         }
-
-        // Focus no número após preencher
-        const numEl = $('addr-numero');
-        if (numEl) setTimeout(() => numEl.focus(), 100);
-
-      } catch {
-        clearAddrAutoFields();
-      } finally {
-        if (spinner) spinner.classList.remove('active');
-      }
+      }, 500);
     });
   }
 
