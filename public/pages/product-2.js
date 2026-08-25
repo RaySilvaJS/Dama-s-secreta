@@ -395,6 +395,63 @@
     });
   };
 
+  const setupShippingCalc = (basePrice) => {
+    const input   = document.getElementById('ship-cep-input');
+    const btn     = document.getElementById('ship-cep-btn');
+    const results = document.getElementById('ship-cep-results');
+    if (!input || !btn || !results) return;
+
+    input.addEventListener('input', () => {
+      let v = input.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 5) v = `${v.slice(0, 5)}-${v.slice(5)}`;
+      input.value = v;
+    });
+
+    const runCalc = async () => {
+      const cep = input.value.replace(/\D/g, '');
+      if (cep.length !== 8) {
+        results.innerHTML = `<p class="shipping-calc-msg error">Digite um CEP válido.</p>`;
+        return;
+      }
+      btn.disabled = true;
+      results.innerHTML = `<p class="shipping-calc-msg"><span class="co-spinner dark" style="display:inline-block;width:13px;height:13px;border-width:2px;vertical-align:middle;margin-right:6px;"></span>Calculando frete...</p>`;
+      try {
+        const r = await fetch('/api/shipping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cep, subtotal: basePrice })
+        });
+        const data = await r.json().catch(() => ({}));
+        const opts = Array.isArray(data.options) ? data.options : [];
+        if (!r.ok || !opts.length) {
+          results.innerHTML = `<p class="shipping-calc-msg error">${data.error || 'Frete não disponível para este CEP.'}</p>`;
+          return;
+        }
+        const sorted = [...opts].sort((a, b) => Number(a.price || a.custom_price || 0) - Number(b.price || b.custom_price || 0));
+        results.innerHTML = sorted.map(o => {
+          const price = Number(o.price || o.custom_price || 0);
+          const days  = o.delivery_time || o.custom_delivery_time || '?';
+          return `
+            <div class="shipping-calc-opt">
+              ${o.company?.picture ? `<img src="${o.company.picture}" alt="${o.company?.name || ''}" class="shipping-calc-opt-logo"/>` : `<span class="shipping-calc-opt-logo-fallback">${IC.truck}</span>`}
+              <div class="shipping-calc-opt-info">
+                <div class="shipping-calc-opt-name">${o.name || 'Entrega'}</div>
+                <div class="shipping-calc-opt-eta">até ${days} dias úteis</div>
+              </div>
+              <div class="shipping-calc-opt-price">${fmt(price)}</div>
+            </div>`;
+        }).join('');
+      } catch (_) {
+        results.innerHTML = `<p class="shipping-calc-msg error">Não foi possível calcular o frete agora. Tente novamente.</p>`;
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    btn.addEventListener('click', runCalc);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') runCalc(); });
+  };
+
   const setupDescToggle = () => {
     const btn = document.getElementById('desc-toggle-btn');
     const full = document.getElementById('desc-full');
@@ -638,7 +695,15 @@
             <div class="installment-row" id="price-installment">
               ${IC.card} ou em até <strong>12x de R$ ${installment}</strong> sem juros
             </div>
-            <p class="shipping-calc">${IC.truck} Calcule o frete na finalização da compra</p>
+            <div class="shipping-calc-widget">
+              <div class="shipping-calc-row">
+                <span class="shipping-calc-icon">${IC.truck}</span>
+                <input type="text" id="ship-cep-input" class="shipping-calc-input" placeholder="Digite seu CEP" inputmode="numeric" maxlength="9" autocomplete="postal-code"/>
+                <button type="button" class="shipping-calc-btn" id="ship-cep-btn">Calcular</button>
+              </div>
+              <a href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener noreferrer" class="shipping-calc-link">Não sei meu CEP</a>
+              <div id="ship-cep-results"></div>
+            </div>
           </div>
 
           <div class="card" id="color-variants-card" style="display:none;"></div>
@@ -753,6 +818,7 @@
     setupColorVariants(product, extras);
     setupSpecsToggle(specEntries.length);
     setupDescToggle();
+    setupShippingCalc(basePrice);
     setupLazyReviews(reviewsList);
   };
 

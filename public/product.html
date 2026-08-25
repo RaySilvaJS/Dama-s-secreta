@@ -555,6 +555,44 @@
     .shipping-calc {
       font-size: .85rem; color: var(--text-2); margin-top: 8px;
     }
+    .shipping-calc-widget { margin-top: 10px; }
+    .shipping-calc-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .shipping-calc-icon { color: var(--text-2); display: flex; flex-shrink: 0; }
+    .shipping-calc-input {
+      flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px;
+      border: 1.5px solid var(--border); font-size: .875rem; font-family: inherit;
+      color: var(--text); background: #fff;
+    }
+    .shipping-calc-input:focus { outline: none; border-color: var(--blue); }
+    .shipping-calc-btn {
+      flex-shrink: 0; padding: 9px 16px; border-radius: 8px; border: none;
+      background: var(--blue); color: #fff; font-size: .85rem; font-weight: 700;
+      cursor: pointer; transition: background .2s;
+    }
+    .shipping-calc-btn:hover { background: var(--blue-dark); }
+    .shipping-calc-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .shipping-calc-link {
+      display: inline-block; font-size: .78rem; color: var(--blue);
+      text-decoration: underline; margin-top: 6px; cursor: pointer;
+    }
+    .shipping-calc-msg { font-size: .82rem; color: var(--text-2); margin-top: 10px; }
+    .shipping-calc-msg.error { color: #DC2626; }
+    .shipping-calc-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0; border-top: 1px solid var(--border);
+    }
+    .shipping-calc-opt:first-child { border-top: none; margin-top: 8px; }
+    .shipping-calc-opt-logo { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }
+    .shipping-calc-opt-logo-fallback {
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+      color: var(--text-2); flex-shrink: 0;
+    }
+    .shipping-calc-opt-info { flex: 1; min-width: 0; }
+    .shipping-calc-opt-name { font-size: .85rem; font-weight: 700; color: var(--text); }
+    .shipping-calc-opt-eta { font-size: .78rem; color: var(--text-2); margin-top: 1px; }
+    .shipping-calc-opt-price { font-size: .9rem; font-weight: 800; color: var(--green); flex-shrink: 0; }
 
     /* Variations */
     .section-label {
