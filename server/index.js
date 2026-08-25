@@ -1298,7 +1298,8 @@ app.post('/api/chat', async (req, res) => {
   res.json(response);
 });
 
-// Endpoint para cálculo de frete via Melhor Envio
+// Endpoint para cálculo de frete via Melhor Envio (inclui Correios PAC/SEDEX e outras
+// transportadoras). Documentação: https://docs.melhorenvio.com.br/reference/calculo-de-fretes-por-produtos
 app.post('/api/shipping', async (req, res) => {
   const { cep, subtotal, width = 20, height = 5, length = 15, weight = 0.8 } = req.body || {};
   if (!cep) return res.status(400).json({ error: 'CEP é obrigatório' });
@@ -1310,94 +1311,54 @@ app.post('/api/shipping', async (req, res) => {
 
   // Origem (loja) - configure via env ORIGIN_CEP se necessário
   const originCep = process.env.ORIGIN_CEP || '01001-000';
+  const contactEmail = process.env.MAIL_FROM_ADDRESS || (process.env.MAIL_FROM || '').match(/<([^>]+)>/)?.[1] || 'contato@damassecreta.com';
 
-  // Monta payload básico compatível com a API (ajuste conforme documentação da Melhor Envio)
   const payload = {
     from: { postal_code: originCep.replace(/\D/g, '') },
     to: { postal_code: String(cep).replace(/\D/g, '') },
     products: [
       {
-        weight: Number(weight),
+        id: 'produto-carrinho',
         width: Number(width),
         height: Number(height),
         length: Number(length),
-        insurance_value: subtotal ? Number(subtotal) : 0
+        weight: Number(weight),
+        insurance_value: subtotal ? Number(subtotal) : 0,
+        quantity: 1
       }
     ]
   };
 
   try {
-    // URL base configurável via env (por exemplo https://api.melhorenvio.com.br)
-    const base = process.env.MELHOR_ENVIO_API_BASE || 'https://api.melhorenvio.com.br';
+    // Base configurável via env (sandbox: https://sandbox.melhorenvio.com.br)
+    const base = process.env.MELHOR_ENVIO_API_BASE || 'https://melhorenvio.com.br';
     const url = `${base}/api/v2/me/shipment/calculate`;
 
     const response = await axios.post(url, payload, {
       headers: {
         Authorization: `Bearer ${MELHOR_ENVIO_TOKEN}`,
-        'Content-Type': 'application/json'
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        // Exigido pela Melhor Envio: nome da aplicação + e-mail de contato
+        'User-Agent': `DAMA'S SECRETA (${contactEmail})`
       },
       timeout: 15000
     });
 
-    // Se a API fornecer um formato diferente, normalize-o aqui. Assumimos um array de opções em response.data
-    const data = response.data || {};
-    if (!data || (Array.isArray(data) && data.length === 0) || (!Array.isArray(data) && Object.keys(data).length === 0)) {
-      return res.status(502).json({ error: 'Resposta inesperada da API do Melhor Envio', raw: data });
+    // Resposta é um array — cada item já vem no formato que o front-end (checkout.js) espera
+    // (price, custom_price, delivery_time, custom_delivery_time, name, company). Só filtra os
+    // serviços indisponíveis (vêm com "error" preenchido em vez de preço).
+    const data = Array.isArray(response.data) ? response.data : [];
+    const options = data.filter(opt => opt && !opt.error && (opt.price || opt.custom_price));
+
+    if (!options.length) {
+      return res.status(502).json({ error: 'Nenhuma transportadora disponível para este CEP no momento.' });
     }
 
-    // Normaliza para um formato amigável: [{carrier, service, price, deadline, logo_url}, ...]
-    let options = [];
-    if (Array.isArray(data)) {
-      options = data.map((opt) => ({
-        carrier: opt.carrier || opt.name || opt.company || 'Transportadora',
-        service: opt.service || opt.modalidade || opt.code || 'Serviço',
-        price: opt.price || opt.total || opt.amount || 0,
-        deadline: opt.deadline || opt.delivery_time || opt.estimated_delivery || null,
-        logo: opt.logo_url || opt.logo || null,
-        raw: opt
-      }));
-    } else if (Array.isArray(data.options)) {
-      options = data.options.map((opt) => ({
-        carrier: opt.carrier || opt.name || 'Transportadora',
-        service: opt.service || opt.modalidade || 'Serviço',
-        price: opt.price || opt.total || 0,
-        deadline: opt.deadline || opt.delivery_time || null,
-        logo: opt.logo || null,
-        raw: opt
-      }));
-    } else if (data.quote) {
-      options = data.quote.map((opt) => ({
-        carrier: opt.carrier || opt.name || 'Transportadora',
-        service: opt.service || opt.modalidade || 'Serviço',
-        price: opt.price || opt.total || 0,
-        deadline: opt.deadline || opt.delivery_time || null,
-        logo: opt.logo || null,
-        raw: opt
-      }));
-    } else {
-      // Fallback: transforma objeto em array com uma única opção
-      options = [
-        {
-          carrier: data.carrier || 'Melhor Envio',
-          service: data.service || 'Padrão',
-          price: data.price || data.total || 0,
-          deadline: data.deadline || null,
-          logo: data.logo || null,
-          raw: data
-        }
-      ];
-    }
-
-    // Responde com opções normalizadas
     res.json({ success: true, options });
   } catch (error) {
-    console.error('Erro ao consultar Melhor Envio:', error.message || error);
-    // Em caso de erro de rede ou da API, devolve uma resposta amigável e um fallback mínimo
-    const fallback = [
-      { carrier: 'Correios', service: 'PAC', price: 24.9, deadline: '8 dias úteis', logo: null },
-      { carrier: 'Correios', service: 'SEDEX', price: 42.9, deadline: '3 dias úteis', logo: null }
-    ];
-    res.status(502).json({ error: 'Falha ao consultar Melhor Envio', message: error.message, fallback });
+    console.error('Erro ao consultar Melhor Envio:', error.response?.data || error.message || error);
+    res.status(502).json({ error: 'Falha ao consultar o frete. Tente novamente em instantes.' });
   }
 });
 
