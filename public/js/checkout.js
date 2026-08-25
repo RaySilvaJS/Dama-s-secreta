@@ -26,7 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const historicoLocal   = localStorage.getItem('historico-pedidos');
   const isPrimeiraCompra = !historicoLocal || JSON.parse(historicoLocal || '[]').length === 0;
-  const hasFreteGratis   = isPrimeiraCompra && orderItems.some(item => item.freteGratis);
 
   // ── State ─────────────────────────────────────────────────────────────────────
   let selectedAddressId = null;
@@ -36,6 +35,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let couponDiscount    = 0;
   let subtotal          = orderItems.reduce((s, i) => s + i.preco * i.quantidade, 0);
   const insuranceAmt    = insurance ? insurance.price : 0;
+
+  // Frete grátis: compras a partir de R$ 299, ou 1ª compra em produtos com o selo "freteGratis"
+  const FRETE_GRATIS_MIN         = 299;
+  const freteGratisPorValor      = subtotal >= FRETE_GRATIS_MIN;
+  const freteGratisPrimeiraCompra = isPrimeiraCompra && orderItems.some(item => item.freteGratis);
+  const hasFreteGratis           = freteGratisPorValor || freteGratisPrimeiraCompra;
+  const freteGratisLabel         = freteGratisPorValor
+    ? `Frete grátis — compra acima de R$ ${FRETE_GRATIS_MIN}!`
+    : '1ª compra — Frete grátis!';
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -413,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="co-ship-info">
         <div class="co-ship-name">${esc(s.region)}</div>
         <div class="co-ship-eta">Entrega em ${esc(s.deadline)}</div>
-        ${hasFreteGratis ? '<div style="font-size:11px;font-weight:700;color:#16A34A;margin-top:2px">1ª compra — Frete grátis!</div>' : ''}
+        ${hasFreteGratis ? `<div style="font-size:11px;font-weight:700;color:#16A34A;margin-top:2px">${esc(freteGratisLabel)}</div>` : ''}
       </div>
       ${hasFreteGratis
         ? `<div><s style="color:#9CA3AF;font-size:11px">${fmt(s.price)}</s><br><span class="co-ship-free">GRÁTIS</span></div>`
