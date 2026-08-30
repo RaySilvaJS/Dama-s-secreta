@@ -395,18 +395,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Frete calculation ─────────────────────────────────────────────────────────
-  function calculateFreteLocal(cep) {
-    const v = Number(cep);
-    if (v >= 1000000  && v <= 5999999)  return { region: 'SP Capital',   price:  9.9, deadline: '1 a 2 dias úteis' };
-    if (v >= 6000000  && v <= 19999999) return { region: 'Interior SP',  price: 14.9, deadline: '2 a 4 dias úteis' };
-    if (v >= 20000000 && v <= 39999999) return { region: 'Sudeste',      price: 18.9, deadline: '3 a 5 dias úteis' };
-    if (v >= 40000000 && v <= 65999999) return { region: 'Nordeste',     price: 29.9, deadline: '5 a 10 dias úteis' };
-    if (v >= 66000000 && v <= 69999999) return { region: 'Norte',        price: 39.9, deadline: '7 a 12 dias úteis' };
-    if (v >= 70000000 && v <= 79999999) return { region: 'Centro-Oeste', price: 24.9, deadline: '4 a 7 dias úteis' };
-    if (v >= 80000000 && v <= 99999999) return { region: 'Sul',          price: 21.9, deadline: '3 a 6 dias úteis' };
-    return null;
-  }
-
   function renderFreteOpt(s) {
     const freteReal = hasFreteGratis ? 0 : s.price;
     shippingData = { ...s };
@@ -437,15 +425,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!cep || cep.length < 8) return;
     shipResults.innerHTML = '<p class="co-muted"><span class="co-spinner dark" style="display:inline-block;width:14px;height:14px;border-width:2px;vertical-align:middle;margin-right:6px;"></span>Calculando frete...</p>';
 
-    // Tenta API do Melhor Envio primeiro
     try {
       const r = await fetch('/api/shipping', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cep, subtotal })
       });
+      const data = await r.json().catch(() => ({}));
+
       if (r.ok) {
-        const data = await r.json();
         // API retorna array de opções; usa a mais barata disponível
         const opts = Array.isArray(data) ? data : (data.options || data.services || []);
         const valid = opts.filter(o => o && !o.error && (o.price || o.custom_price));
@@ -457,17 +445,15 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
       }
-    } catch (_) { /* fallback abaixo */ }
 
-    // Fallback: tabela local por faixa de CEP
-    const s = calculateFreteLocal(cep);
-    if (!s) {
-      shipResults.innerHTML = '<p class="co-muted">Frete não disponível para este CEP. Entre em contato pelo WhatsApp.</p>';
+      shipResults.innerHTML = `<p class="co-muted" style="color:#DC2626">${esc(data.error) || 'Frete não disponível para este CEP no momento. Entre em contato pelo WhatsApp.'}</p>`;
       shippingData = null;
       updateTotal();
-      return;
+    } catch (_) {
+      shipResults.innerHTML = '<p class="co-muted" style="color:#DC2626">Não foi possível calcular o frete agora. Tente novamente.</p>';
+      shippingData = null;
+      updateTotal();
     }
-    renderFreteOpt({ ...s, cep });
   }
 
   // ── Billing ───────────────────────────────────────────────────────────────────
