@@ -1367,6 +1367,10 @@ app.post('/api/shipping', async (req, res) => {
     const options = data.filter(opt => opt && !opt.error && (opt.price || opt.custom_price));
 
     if (!options.length) {
+      // A Melhor Envio respondeu OK, mas nenhuma transportadora veio com preço — loga a resposta
+      // crua (inclui o "error" de cada uma, ex: transportadora não contratada/habilitada na conta)
+      // pra dar pra diagnosticar direto pelos logs do DevOps, sem precisar reproduzir o problema.
+      console.error('[MELHOR-ENVIO] Nenhuma opção com preço para CEP', cep, '— resposta crua:', JSON.stringify(data));
       return res.status(502).json({ error: 'Nenhuma transportadora disponível para este CEP no momento.' });
     }
 
