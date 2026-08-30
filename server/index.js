@@ -1368,9 +1368,10 @@ app.post('/api/shipping', async (req, res) => {
 
     if (!options.length) {
       // A Melhor Envio respondeu OK, mas nenhuma transportadora veio com preço — loga a resposta
-      // crua (inclui o "error" de cada uma, ex: transportadora não contratada/habilitada na conta)
-      // pra dar pra diagnosticar direto pelos logs do DevOps, sem precisar reproduzir o problema.
-      console.error('[MELHOR-ENVIO] Nenhuma opção com preço para CEP', cep, '— resposta crua:', JSON.stringify(data));
+      // crua ANTES de qualquer coerção (response.data, não "data"/"options" já filtrados), porque
+      // se a resposta não for um array (ex: objeto de erro tipo {message: "..."}), "data" vira []
+      // e a causa real se perde. Isso já aconteceu antes e escondeu o erro de verdade.
+      console.error('[MELHOR-ENVIO] Nenhuma opção com preço para CEP', cep, '— resposta crua:', JSON.stringify(response.data));
       return res.status(502).json({ error: 'Nenhuma transportadora disponível para este CEP no momento.' });
     }
 
