@@ -1360,10 +1360,14 @@ app.post('/api/shipping', async (req, res) => {
       timeout: 15000
     });
 
-    // Resposta é um array — cada item já vem no formato que o front-end (checkout.js) espera
-    // (price, custom_price, delivery_time, custom_delivery_time, name, company). Só filtra os
-    // serviços indisponíveis (vêm com "error" preenchido em vez de preço).
-    const data = Array.isArray(response.data) ? response.data : [];
+    // Normalmente a resposta é um array de opções, mas quando só UMA transportadora consegue
+    // cotar pro CEP a Melhor Envio devolve um objeto único em vez de um array de 1 item — por
+    // isso trata os dois formatos (isso já causou uma cotação válida ser descartada por engano).
+    // Cada item vem no formato que o front-end (checkout.js) espera (price, custom_price,
+    // delivery_time, custom_delivery_time, name, company). Só filtra os indisponíveis (vêm com
+    // "error" preenchido em vez de preço).
+    const raw  = response.data;
+    const data = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : []);
     const options = data.filter(opt => opt && !opt.error && (opt.price || opt.custom_price));
 
     if (!options.length) {
