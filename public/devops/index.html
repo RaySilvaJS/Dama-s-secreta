@@ -1332,8 +1332,10 @@ tbody tr:last-child td { border-bottom: none; }
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="btn btn-blue" onclick="saveMeCfg()">💾 Salvar Client ID/Secret</button>
           <button class="btn btn-green" onclick="connectMe()">🔗 Conectar com Melhor Envio</button>
+          <button class="btn" onclick="checkMeCompanies()">🔍 Ver transportadoras habilitadas</button>
         </div>
         <div id="me-cfg-feedback" style="font-size:12px;color:var(--green);display:none;margin-top:6px"></div>
+        <div id="me-companies-result" style="font-size:12px;margin-top:10px;display:none"></div>
       </div>
 
       <!-- Gerador de QR Code PIX de Teste -->
@@ -5540,6 +5542,31 @@ async function connectMe() {
     fb.style.color = 'var(--red)';
     fb.textContent = r?.error || 'Não foi possível iniciar a conexão.';
     fb.style.display = '';
+  }
+}
+
+async function checkMeCompanies() {
+  const box = document.getElementById('me-companies-result');
+  if (!box) return;
+  box.style.display = '';
+  box.innerHTML = '<span style="color:var(--muted)">Consultando a Melhor Envio...</span>';
+  try {
+    const r = await api.get('/api/admin/melhorenvio/companies');
+    if (!r?.ok) {
+      box.innerHTML = `<span style="color:var(--red)">${(r?.error || 'Erro ao consultar transportadoras.')}</span>`;
+      return;
+    }
+    if (!r.companies.length) {
+      box.innerHTML = '<span style="color:var(--red)">Nenhuma transportadora habilitada nesta conta. Acesse melhorenvio.com.br e habilite/contrate ao menos os Correios.</span>';
+      return;
+    }
+    box.innerHTML = r.companies.map(c => `
+      <div style="padding:6px 0;border-top:1px solid var(--border)">
+        <strong>${c.name}</strong>
+        <span style="color:var(--muted)"> — ${c.services.length ? c.services.join(', ') : 'nenhum serviço disponível'}</span>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<span style="color:var(--red)">Erro: ${e.message}</span>`;
   }
 }
 

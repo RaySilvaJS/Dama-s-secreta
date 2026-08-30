@@ -1163,6 +1163,37 @@ router.post('/melhorenvio/config', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Diagnóstico: consulta direto na Melhor Envio quais transportadoras a conta tem
+// disponíveis pra cotação. Útil pra descobrir por que /api/shipping devolve lista vazia
+// (o caso mais comum é conta nova sem nenhuma transportadora contratada/habilitada ainda).
+router.get('/melhorenvio/companies', adminAuth, async (req, res) => {
+  const token = await getMelhorEnvioAccessToken();
+  if (!token) {
+    return res.status(400).json({ ok: false, error: 'Melhor Envio não está conectado.' });
+  }
+  try {
+    const resp = await axios.get(`${ME_BASE()}/api/v2/me/shipment/companies`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'User-Agent': `DAMA'S SECRETA (${ME_CONTACT_EMAIL()})`,
+      },
+      timeout: 15000,
+    });
+    const companies = Array.isArray(resp.data) ? resp.data : [];
+    res.json({
+      ok: true,
+      companies: companies.map(c => ({
+        id: c.id,
+        name: c.name,
+        services: (c.services || []).map(s => s.name),
+      })),
+    });
+  } catch (e) {
+    res.status(502).json({ ok: false, error: e.response?.data?.message || e.message, raw: e.response?.data || null });
+  }
+});
+
 router.get('/melhorenvio/connect', adminAuth, (req, res) => {
   const me = getMeConfig();
   if (!me.clientId || !me.clientSecret) {
