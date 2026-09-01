@@ -156,7 +156,14 @@ router.post('/generate', async (req, res) => {
     proofGroupMessageId: null,
     address,
     proofs:          [],
-    logs:            []
+    logs:            [],
+    // Rastreamento (ver server/admin.js pro modelo completo) — semeia o primeiro
+    // evento aqui; aprovar/recusar o pedido (PATCH /orders/:id) avança o resto.
+    tracking: {
+      codigo: null, transportadora: null, statusAtual: 'PEDIDO_REALIZADO',
+      dataEnvio: null, previsaoPostagem: null, previsaoEntrega: null, notifiedStatuses: [],
+      eventos: [{ status: 'PEDIDO_REALIZADO', descricao: 'Pedido realizado pelo cliente', data: new Date().toISOString(), localizacao: null, origem: 'sistema' }],
+    },
   };
 
   payments.push(newPayment);

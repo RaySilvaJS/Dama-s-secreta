@@ -790,6 +790,114 @@ router.get('/tracker/stats', adminAuth, (req, res) => {
   res.json(tracker.snap());
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// ── RASTREAMENTO DE PEDIDOS ──────────────────────────────────────────────────
+// Status granular (histórico de eventos por pedido) usado tanto no sistema legado
+// (payments.json) quanto no Mercado Pago (mp_orders.json) — ver TRACKING_STATUS_LABELS
+// pra nomes amigáveis. Cada pedido ganha um campo "tracking" (aditivo — não substitui
+// os campos fulfillmentStatus/trackingCode já existentes e testados, mantém os dois
+// em sincronia pra não quebrar nada que já depende deles).
+// ════════════════════════════════════════════════════════════════════════════
+const TRACKING_STATUS_LABELS = {
+  PEDIDO_REALIZADO:        'Pedido realizado',
+  PAGAMENTO_PENDENTE:      'Pagamento pendente',
+  PAGAMENTO_APROVADO:      'Pagamento aprovado',
+  PAGAMENTO_RECUSADO:      'Pagamento recusado',
+  PREPARANDO_ENVIO:        'Preparando pedido',
+  AGUARDANDO_POSTAGEM:     'Aguardando envio',
+  ENVIADO:                 'Pedido enviado',
+  OBJETO_POSTADO:          'Objeto postado',
+  RECEBIDO_TRANSPORTADORA: 'Recebido pela transportadora',
+  EM_TRANSITO:             'Em trânsito',
+  CHEGOU_UNIDADE:          'Chegou à unidade de distribuição',
+  SAIU_PARA_ENTREGA:       'Saiu para entrega',
+  ENTREGUE:                'Entregue',
+  TENTATIVA_ENTREGA:       'Tentativa de entrega',
+  ENDERECO_NAO_LOCALIZADO: 'Endereço não localizado',
+  DEVOLVIDO:               'Objeto devolvido',
+  CANCELADO:               'Pedido cancelado',
+};
+
+// Status que representam eventos "importantes" o bastante pra avisar o cliente no
+// WhatsApp — evita notificar em toda micro-atualização (ex: "chegou na unidade").
+const TRACKING_NOTIFY_STATUSES = new Set(['ENVIADO', 'EM_TRANSITO', 'SAIU_PARA_ENTREGA', 'ENTREGUE', 'DEVOLVIDO', 'CANCELADO', 'TENTATIVA_ENTREGA', 'ENDERECO_NAO_LOCALIZADO']);
+
+function getTrackingConfig() {
+  const cfg = loadConfig();
+  return Object.assign({ prazoPostagemDiasUteis: 1, feriados: [] }, cfg.trackingConfig || {});
+}
+
+function saveTrackingConfig(partial) {
+  const cfg = loadConfig();
+  cfg.trackingConfig = Object.assign(getTrackingConfig(), partial);
+  saveConfig(cfg);
+  return cfg.trackingConfig;
+}
+
+// Soma N dias úteis a partir de uma data, pulando sábado/domingo e feriados
+// configurados (lista de strings "YYYY-MM-DD"). Usado pra calcular a previsão
+// de postagem assim que o pagamento é aprovado.
+function addBusinessDays(fromIso, days, holidays) {
+  const holidaySet = new Set(holidays || []);
+  const d = new Date(fromIso);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6 && !holidaySet.has(iso)) added++;
+  }
+  return d.toISOString();
+}
+
+function newTrackingObject() {
+  return {
+    codigo: null,
+    transportadora: null,
+    statusAtual: 'PEDIDO_REALIZADO',
+    dataEnvio: null,
+    previsaoPostagem: null,
+    previsaoEntrega: null,
+    notifiedStatuses: [],
+    eventos: [],
+  };
+}
+
+// Acrescenta um evento ao histórico de rastreamento do pedido (nunca substitui os
+// anteriores) e mantém fulfillmentStatus/trackingCode/shippedAt/deliveredAt em sincronia
+// pra não quebrar a tela "Meus Pedidos" e o painel de pedidos já existentes.
+function appendTrackingEvent(order, { status, descricao, localizacao, origem, data }) {
+  if (!order.tracking) order.tracking = newTrackingObject();
+  const t = order.tracking;
+  const now = data || new Date().toISOString();
+
+  // Evita duplicar o mesmo evento na timeline se o admin cadastrar de novo (ex: clique
+  // duplo, recadastrar o mesmo código de rastreio) — a notificação já tem seu próprio
+  // controle de duplicidade (notifiedStatuses), isso aqui é só sobre o histórico visível.
+  const last = t.eventos[t.eventos.length - 1];
+  const isDuplicate = last && last.status === status && (localizacao || null) === (last.localizacao || null) && (descricao || TRACKING_STATUS_LABELS[status] || status) === last.descricao;
+  if (!isDuplicate) {
+    t.eventos.push({
+      status,
+      descricao: descricao || TRACKING_STATUS_LABELS[status] || status,
+      data: now,
+      localizacao: localizacao || null,
+      origem: origem || 'sistema',
+    });
+  }
+  t.statusAtual = status;
+
+  if (status === 'ENVIADO') {
+    order.fulfillmentStatus = 'shipped';
+    order.shippedAt = now;
+    t.dataEnvio = now;
+  } else if (status === 'ENTREGUE') {
+    order.fulfillmentStatus = 'delivered';
+    order.deliveredAt = now;
+  }
+  return t;
+}
+
 // ── Merge de pedidos: legado (PIX manual, payments.json) + Mercado Pago (mp_orders.json) ──
 // O projeto tem dois sistemas de pedido que nunca foram conectados (ver mercadoPagoOrders.js):
 // o legado grava em payments.json e notifica o WhatsApp; o do Mercado Pago (o que realmente
@@ -843,6 +951,7 @@ function loadMpOrdersNormalized() {
       trackingCode: o.trackingCode || null,
       shippedAt:    o.shippedAt || null,
       deliveredAt:  o.deliveredAt || null,
+      tracking:     o.tracking || null,
       logs: (o.auditLog || []).map(l => ({ timestamp: l.at, type: l.type, details: l.details })),
     };
   });
@@ -1407,12 +1516,16 @@ router.get('/orders', adminAuth, (req, res) => {
     if (dateTo)   payments = payments.filter(p => (p.createdAt || '') <= dateTo + 'T23:59:59Z');
     if (search) {
       const s = search.toLowerCase();
+      const sDigits = search.replace(/\D/g, '');
       payments = payments.filter(p =>
         (p.id || '').toLowerCase().includes(s) ||
+        (p.shortId || '').toLowerCase().includes(s) ||
         (p.clientPhone || '').includes(s) ||
         (p.product || '').toLowerCase().includes(s) ||
         (p.clientName || '').toLowerCase().includes(s) ||
-        (p.clientEmail || '').toLowerCase().includes(s)
+        (p.clientEmail || '').toLowerCase().includes(s) ||
+        (sDigits && (p.clientCpf || '').replace(/\D/g, '').includes(sDigits)) ||
+        (p.trackingCode || '').toLowerCase().includes(s)
       );
     }
 
@@ -1456,6 +1569,30 @@ router.patch('/orders/:id', adminAuth, async (req, res) => {
     // Timestamps
     if (newStatus === 'paid')    payments[idx].paidAt    = new Date().toISOString();
     if (newStatus === 'refused') payments[idx].refusedAt = new Date().toISOString();
+
+    // Rastreamento: ao aprovar o pagamento, o pedido avança automaticamente até
+    // "aguardando postagem" — só o cadastro do código de rastreio (endpoint de
+    // fulfillment abaixo) marca como ENVIADO de fato. Nunca aviso o cliente aqui
+    // de que já foi enviado, só que está sendo preparado.
+    if (newStatus === 'paid' && prevStatus !== 'paid') {
+      const order = payments[idx];
+      if (!order.tracking) order.tracking = newTrackingObject();
+      appendTrackingEvent(order, { status: 'PAGAMENTO_APROVADO', descricao: 'Pagamento confirmado', origem: 'sistema' });
+      appendTrackingEvent(order, { status: 'PREPARANDO_ENVIO', descricao: 'Pedido em preparação para envio', origem: 'sistema' });
+      const trackCfg = getTrackingConfig();
+      const previsao = addBusinessDays(new Date().toISOString(), trackCfg.prazoPostagemDiasUteis, trackCfg.feriados);
+      order.tracking.previsaoPostagem = previsao;
+      const previsaoFmt = new Date(previsao).toLocaleDateString('pt-BR');
+      appendTrackingEvent(order, { status: 'AGUARDANDO_POSTAGEM', descricao: `Aguardando postagem — previsão até ${previsaoFmt}`, origem: 'sistema' });
+    } else if (newStatus === 'refused' && prevStatus !== 'refused') {
+      const order = payments[idx];
+      if (!order.tracking) order.tracking = newTrackingObject();
+      appendTrackingEvent(order, { status: 'PAGAMENTO_RECUSADO', descricao: note || 'Pagamento recusado', origem: 'sistema' });
+    } else if (newStatus === 'cancelled' && prevStatus !== 'cancelled') {
+      const order = payments[idx];
+      if (!order.tracking) order.tracking = newTrackingObject();
+      appendTrackingEvent(order, { status: 'CANCELADO', descricao: note || 'Pedido cancelado', origem: 'sistema' });
+    }
 
     fs.writeFileSync(path.join(DATA, 'payments.json'), JSON.stringify(payments, null, 2));
     audit.append('order_status_change', req.adminUser?.email || 'devops', req.ip, { orderId: req.params.id, status: newStatus });
@@ -1515,12 +1652,19 @@ router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
     const payments = JSON.parse(fs.readFileSync(paymentsFile, 'utf-8'));
     let idx = payments.findIndex(p => p.id === req.params.id);
 
+    const eventStatus = fulfillmentStatus === 'shipped' ? 'ENVIADO' : 'ENTREGUE';
+    let orderId, notifiedAlready;
+
     if (idx !== -1) {
       const order = payments[idx];
-      order.fulfillmentStatus = fulfillmentStatus;
-      if (trackingCode !== undefined) order.trackingCode = trackingCode || null;
-      if (fulfillmentStatus === 'shipped')   order.shippedAt   = now;
-      if (fulfillmentStatus === 'delivered') order.deliveredAt = now;
+      if (!order.tracking) order.tracking = newTrackingObject();
+      notifiedAlready = order.tracking.notifiedStatuses.includes(eventStatus);
+      if (trackingCode !== undefined) { order.trackingCode = trackingCode || null; order.tracking.codigo = trackingCode || null; }
+      appendTrackingEvent(order, {
+        status: eventStatus,
+        descricao: eventStatus === 'ENVIADO' ? `Pedido enviado${trackingCode ? ' — código ' + trackingCode : ''}` : 'Pedido entregue',
+        origem: 'manual',
+      });
       order.logs = order.logs || [];
       order.logs.push({
         type: 'fulfillment_update',
@@ -1533,6 +1677,7 @@ router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
       clientName   = order.clientName;
       shortDisplay = order.shortId ? `#${order.shortId}` : order.id.slice(0, 8);
       productLabel = order.productName || order.productId;
+      orderId      = order.id;
     } else {
       const mpOrdersFile = path.join(DATA, 'mp_orders.json');
       const mpOrders = JSON.parse(fs.readFileSync(mpOrdersFile, 'utf-8'));
@@ -1540,10 +1685,14 @@ router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
       if (idx === -1) return res.status(404).json({ error: 'Pedido não encontrado.' });
 
       const order = mpOrders[idx];
-      order.fulfillmentStatus = fulfillmentStatus;
-      if (trackingCode !== undefined) order.trackingCode = trackingCode || null;
-      if (fulfillmentStatus === 'shipped')   order.shippedAt   = now;
-      if (fulfillmentStatus === 'delivered') order.deliveredAt = now;
+      if (!order.tracking) order.tracking = newTrackingObject();
+      notifiedAlready = order.tracking.notifiedStatuses.includes(eventStatus);
+      if (trackingCode !== undefined) { order.trackingCode = trackingCode || null; order.tracking.codigo = trackingCode || null; }
+      appendTrackingEvent(order, {
+        status: eventStatus,
+        descricao: eventStatus === 'ENVIADO' ? `Pedido enviado${trackingCode ? ' — código ' + trackingCode : ''}` : 'Pedido entregue',
+        origem: 'manual',
+      });
       order.auditLog = order.auditLog || [];
       order.auditLog.push({ at: now, type: 'fulfillment_update', details: `${fulfillmentStatus}${trackingCode ? ' | rastreio: ' + trackingCode : ''}` });
       fs.writeFileSync(mpOrdersFile, JSON.stringify(mpOrders, null, 2));
@@ -1554,21 +1703,26 @@ router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
       clientName   = user.nome || null;
       shortDisplay = order.externalReference ? order.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : order.id.slice(0, 8);
       productLabel = (order.items || []).map(i => i.name).filter(Boolean).join(', ');
+      orderId      = order.id;
     }
 
     audit.append('order_fulfillment_change', req.adminUser?.email || 'devops', req.ip, { orderId: req.params.id, fulfillmentStatus, trackingCode: trackingCode || null });
 
-    if (clientPhone) {
+    // Evita reenviar a mesma notificação se o admin clicar duas vezes / recadastrar o mesmo código.
+    if (clientPhone && !notifiedAlready) {
+      const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+      const trackLink = appUrl ? `${appUrl}/meus-pedidos.html?pedido=${orderId}` : null;
       const lines = fulfillmentStatus === 'shipped'
         ? [
-            '📦 *Pedido Enviado!*',
+            `Olá${clientName ? ', ' + clientName : ''}! 📦`,
             '',
-            `Olá${clientName ? ', ' + clientName : ''}!`,
-            `Seu pedido #${shortDisplay} *saiu para entrega*.`,
+            `Seu pedido #${shortDisplay} foi enviado!`,
             productLabel ? `🛍️ Produto: ${productLabel}` : null,
-            trackingCode ? `🔎 Código de rastreio: ${trackingCode}` : null,
+            trackingCode ? `\nCódigo de rastreio:\n${trackingCode}` : null,
             '',
-            'Você pode acompanhar tudo em "Meus Pedidos" no site. Obrigado pela compra! 💗',
+            trackLink ? `Agora você pode acompanhar o andamento da entrega diretamente pelo nosso site:\n${trackLink}` : 'Acompanhe o andamento em "Meus Pedidos" no site.',
+            '',
+            'Obrigado pela compra! ❤️',
           ].filter(Boolean).join('\n')
         : [
             '✅ *Pedido Entregue!*',
@@ -1578,10 +1732,169 @@ router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
             '',
             'Esperamos que você ame sua compra! Qualquer coisa, estamos por aqui. 💗',
           ].join('\n');
-      sendToClient(clientPhone, lines).catch(() => {});
+
+      try {
+        await sendToClient(clientPhone, lines);
+        // Marca como notificado só depois de re-carregar o arquivo, pra não perder
+        // concorrência com outras escritas — busca de novo pelo id.
+        const file = idx !== -1 && payments[idx] && payments[idx].id === orderId ? paymentsFile : path.join(DATA, 'mp_orders.json');
+        const list = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        const i2 = list.findIndex(o => o.id === orderId);
+        if (i2 !== -1) {
+          if (!list[i2].tracking) list[i2].tracking = newTrackingObject();
+          list[i2].tracking.notifiedStatuses = [...new Set([...(list[i2].tracking.notifiedStatuses || []), eventStatus])];
+          fs.writeFileSync(file, JSON.stringify(list, null, 2));
+        }
+      } catch (waErr) {
+        // Nunca desfaz o cadastro do código por causa de falha no WhatsApp — só registra.
+        console.error('[Rastreamento] Falha ao notificar cliente via WhatsApp:', waErr.message);
+        audit.append('tracking_notify_failed', req.adminUser?.email || 'devops', req.ip, { orderId, eventStatus, error: waErr.message });
+      }
     }
 
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Lista os status/labels válidos, pro DevOps montar o <select> do formulário
+// de "Adicionar atualização" sem hardcoded duplicado no HTML.
+router.get('/tracking/statuses', adminAuth, (req, res) => {
+  res.json({ statuses: Object.entries(TRACKING_STATUS_LABELS).map(([value, label]) => ({ value, label })) });
+});
+
+router.get('/tracking/config', adminAuth, (req, res) => {
+  res.json(getTrackingConfig());
+});
+
+// Dashboard da aba "Rastreamento de Pedidos" — conta pedidos por estágio real de
+// entrega (não de pagamento), olhando tracking.statusAtual quando existe.
+router.get('/tracking/stats', adminAuth, (req, res) => {
+  try {
+    const payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8')).concat(loadMpOrdersNormalized());
+    const paidOnly = payments.filter(p => p.status === 'paid');
+    const statusOf = (p) => (p.tracking && p.tracking.statusAtual) || (p.fulfillmentStatus === 'delivered' ? 'ENTREGUE' : p.fulfillmentStatus === 'shipped' ? 'ENVIADO' : 'AGUARDANDO_POSTAGEM');
+    const count = (statuses) => paidOnly.filter(p => statuses.includes(statusOf(p))).length;
+
+    res.json({
+      total: paidOnly.length,
+      aguardandoEnvio: count(['PAGAMENTO_APROVADO', 'PREPARANDO_ENVIO', 'AGUARDANDO_POSTAGEM']),
+      enviados: count(['ENVIADO', 'OBJETO_POSTADO', 'RECEBIDO_TRANSPORTADORA']),
+      emTransito: count(['EM_TRANSITO', 'CHEGOU_UNIDADE']),
+      saiuParaEntrega: count(['SAIU_PARA_ENTREGA']),
+      entregues: count(['ENTREGUE']),
+      problemas: count(['TENTATIVA_ENTREGA', 'ENDERECO_NAO_LOCALIZADO', 'DEVOLVIDO']),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/tracking/config', adminAuth, (req, res) => {
+  const { prazoPostagemDiasUteis, feriados } = req.body || {};
+  const partial = {};
+  if (prazoPostagemDiasUteis !== undefined) {
+    const n = parseInt(prazoPostagemDiasUteis, 10);
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: 'Prazo de postagem inválido.' });
+    partial.prazoPostagemDiasUteis = n;
+  }
+  if (Array.isArray(feriados)) {
+    partial.feriados = feriados.filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f));
+  }
+  const saved = saveTrackingConfig(partial);
+  audit.append('tracking_config_updated', req.adminUser?.email || 'devops', req.ip, saved);
+  res.json({ ok: true, config: saved });
+});
+
+// Evento manual de rastreamento — pra transportadoras/casos sem API automática
+// (ver seção 12 do pedido: status + data + hora + localização + descrição).
+// Nunca substitui o histórico — sempre acrescenta (ver appendTrackingEvent).
+router.post('/orders/:id/tracking-event', adminAuth, async (req, res) => {
+  try {
+    const { status, data, hora, localizacao, descricao } = req.body || {};
+    if (!status || !TRACKING_STATUS_LABELS[status]) {
+      return res.status(400).json({ error: 'Status inválido.' });
+    }
+
+    let eventIso = new Date().toISOString();
+    if (data) {
+      const timePart = hora && /^\d{2}:\d{2}$/.test(hora) ? hora : '00:00';
+      const parsed = new Date(`${data}T${timePart}:00`);
+      if (!isNaN(parsed.getTime())) eventIso = parsed.toISOString();
+    }
+
+    const paymentsFile = path.join(DATA, 'payments.json');
+    const payments = JSON.parse(fs.readFileSync(paymentsFile, 'utf-8'));
+    let idx = payments.findIndex(p => p.id === req.params.id);
+    let order, file, list;
+
+    if (idx !== -1) {
+      order = payments[idx]; file = paymentsFile; list = payments;
+    } else {
+      const mpOrdersFile = path.join(DATA, 'mp_orders.json');
+      const mpOrders = JSON.parse(fs.readFileSync(mpOrdersFile, 'utf-8'));
+      idx = mpOrders.findIndex(o => o.id === req.params.id);
+      if (idx === -1) return res.status(404).json({ error: 'Pedido não encontrado.' });
+      order = mpOrders[idx]; file = mpOrdersFile; list = mpOrders;
+    }
+
+    if (!order.tracking) order.tracking = newTrackingObject();
+    const notifiedAlready = order.tracking.notifiedStatuses.includes(status);
+    appendTrackingEvent(order, { status, descricao, localizacao, origem: 'manual', data: eventIso });
+    fs.writeFileSync(file, JSON.stringify(list, null, 2));
+
+    audit.append('tracking_event_added', req.adminUser?.email || 'devops', req.ip, { orderId: order.id, status, localizacao: localizacao || null });
+
+    // Notifica o cliente só pra status "importantes" (ver TRACKING_NOTIFY_STATUSES) e
+    // só uma vez por status, pra não spammar o WhatsApp a cada micro-atualização.
+    let clientPhone = null, clientName = null, shortDisplay = null;
+    if (order.userId) {
+      const users = JSON.parse(fs.readFileSync(path.join(DATA, 'users.json'), 'utf-8'));
+      const user = users.find(u => u.id === order.userId) || {};
+      clientPhone = user.whatsapp || null;
+      clientName  = user.nome || null;
+      shortDisplay = order.externalReference ? order.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : order.id.slice(0, 8);
+    } else {
+      clientPhone = order.clientPhone || null;
+      clientName  = order.clientName || null;
+      shortDisplay = order.shortId ? `#${order.shortId}` : order.id.slice(0, 8);
+    }
+
+    if (clientPhone && !notifiedAlready && TRACKING_NOTIFY_STATUSES.has(status)) {
+      const STATUS_MESSAGES = {
+        ENVIADO: 'Seu pedido foi enviado! 📦',
+        EM_TRANSITO: 'Seu pedido está a caminho.',
+        SAIU_PARA_ENTREGA: 'Seu pedido saiu para entrega. 🚚',
+        ENTREGUE: 'Pedido entregue com sucesso! ✅',
+        DEVOLVIDO: 'Seu pedido foi devolvido — entre em contato com a gente.',
+        CANCELADO: 'Seu pedido foi cancelado.',
+        TENTATIVA_ENTREGA: 'Houve uma tentativa de entrega do seu pedido — pode ser necessário retirar ou reagendar.',
+        ENDERECO_NAO_LOCALIZADO: 'A transportadora não conseguiu localizar o endereço do seu pedido — entre em contato com a gente.',
+      };
+      const appUrl = (process.env.APP_URL || '').replace(/\/+$/, '');
+      const trackLink = appUrl ? `${appUrl}/meus-pedidos.html?pedido=${order.id}` : null;
+      const lines = [
+        `Olá${clientName ? ', ' + clientName : ''}!`,
+        '',
+        STATUS_MESSAGES[status] || TRACKING_STATUS_LABELS[status],
+        '',
+        `Pedido: #${shortDisplay}`,
+        trackLink ? `\nAcompanhe pelo site: ${trackLink}` : null,
+      ].filter(Boolean).join('\n');
+
+      try {
+        await sendToClient(clientPhone, lines);
+        const list2 = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        const i2 = list2.findIndex(o => o.id === order.id);
+        if (i2 !== -1) {
+          if (!list2[i2].tracking) list2[i2].tracking = newTrackingObject();
+          list2[i2].tracking.notifiedStatuses = [...new Set([...(list2[i2].tracking.notifiedStatuses || []), status])];
+          fs.writeFileSync(file, JSON.stringify(list2, null, 2));
+        }
+      } catch (waErr) {
+        console.error('[Rastreamento] Falha ao notificar cliente via WhatsApp:', waErr.message);
+        audit.append('tracking_notify_failed', req.adminUser?.email || 'devops', req.ip, { orderId: order.id, status, error: waErr.message });
+      }
+    }
+
+    res.json({ ok: true, tracking: order.tracking });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

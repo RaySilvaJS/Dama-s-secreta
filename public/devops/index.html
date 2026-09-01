@@ -503,6 +503,7 @@ tbody tr:last-child td { border-bottom: none; }
     <div class="nav-section">Negócio</div>
     <div class="nav-item active" data-page="site"><span class="ni-icon">🌎</span> Site</div>
     <div class="nav-item" data-page="orders"><span class="ni-icon">🛒</span> Pedidos</div>
+    <div class="nav-item" data-page="tracking"><span class="ni-icon">📦</span> Rastreamento</div>
     <div class="nav-item" data-page="financeiro"><span class="ni-icon">💰</span> Financeiro <span class="nav-badge" id="fin-badge" style="display:none">0</span></div>
     <div class="nav-item" data-page="analytics"><span class="ni-icon">📊</span> Analytics</div>
     <div class="nav-section">Operações</div>
@@ -1206,6 +1207,44 @@ tbody tr:last-child td { border-bottom: none; }
       <div id="order-drawer-content"></div>
     </div>
     <div id="order-drawer-overlay" onclick="closeOrderDrawer()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:299"></div>
+
+    <!-- ═══ RASTREAMENTO DE PEDIDOS ═══ -->
+    <div class="page" id="page-tracking">
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin:0 0 10px">⚙️ Prazo de Postagem</h3>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Usado pra calcular a "previsão de postagem" assim que um pagamento é aprovado — conta só dias úteis (pula sábado, domingo e os feriados abaixo).</p>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Prazo (dias úteis)</label>
+            <input class="input" id="tracking-prazo-input" type="number" min="0" style="width:120px"/>
+          </div>
+          <div style="flex:1;min-width:240px">
+            <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Feriados (AAAA-MM-DD, separados por vírgula)</label>
+            <input class="input" id="tracking-feriados-input" type="text" style="width:100%" placeholder="2026-12-25, 2026-01-01"/>
+          </div>
+          <button class="btn btn-blue" onclick="saveTrackingConfig()">💾 Salvar</button>
+        </div>
+        <div id="tracking-config-feedback" style="font-size:12px;display:none;margin-top:8px"></div>
+      </div>
+
+      <div class="stats-grid" id="tracking-stats" style="margin-bottom:16px"></div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <input class="input" id="tracking-search" placeholder="Buscar por nº do pedido, cliente, e-mail, telefone, CPF ou código de rastreio..." style="flex:1;min-width:260px" oninput="loadTrackingDebounced()">
+        <button class="btn btn-ghost" onclick="loadTracking()">↺ Atualizar</button>
+        <span id="tracking-count" style="color:var(--muted);font-size:12px"></span>
+      </div>
+
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Status de entrega</th><th>Rastreio</th><th>Data</th><th>Ações</th></tr></thead>
+            <tbody id="tracking-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="tracking-pagination" style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap"></div>
+    </div>
 
     <!-- ═══ FINANCEIRO ═══ -->
     <div class="page" id="page-financeiro">
@@ -2326,7 +2365,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => showPage(el.dataset.page));
 });
 
-const pageTitles = { site: '🌎 SITE — Central de Monitoramento', dashboard: 'Dashboard', whatsapp: 'WhatsApp Bot', monitor: 'Monitoramento do Servidor', deploy: 'Deploy & Atualizações', terminal: '💻 Terminal', logs: 'Visualizador de Logs', backup: 'Backup', files: 'Gerenciador de Arquivos', security: 'Segurança', audit: 'Auditoria', alerts: 'Alertas & Notificações', orders: 'Gestão de Pedidos', catalogs: 'Gerenciador de Catálogos', analytics: 'Analytics & Estatísticas', settings: 'Configurações', clientes: 'Clientes Cadastrados', produtos: '📱 Produtos Personalizados', cupons: '🎟️ Cupons de Desconto', banners: '🖼️ Banners do Carrossel' };
+const pageTitles = { site: '🌎 SITE — Central de Monitoramento', dashboard: 'Dashboard', whatsapp: 'WhatsApp Bot', monitor: 'Monitoramento do Servidor', deploy: 'Deploy & Atualizações', terminal: '💻 Terminal', logs: 'Visualizador de Logs', backup: 'Backup', files: 'Gerenciador de Arquivos', security: 'Segurança', audit: 'Auditoria', alerts: 'Alertas & Notificações', orders: 'Gestão de Pedidos', catalogs: 'Gerenciador de Catálogos', analytics: 'Analytics & Estatísticas', settings: 'Configurações', clientes: 'Clientes Cadastrados', produtos: '📱 Produtos Personalizados', cupons: '🎟️ Cupons de Desconto', banners: '🖼️ Banners do Carrossel', tracking: '📦 Rastreamento de Pedidos' };
 
 function toggleMobMenu() {
   document.getElementById('sidebar').classList.toggle('mob-open');
@@ -2374,6 +2413,7 @@ function loadPage(name) {
   else if (name === 'produtos') loadProdutos();
   else if (name === 'cupons') loadCupons();
   else if (name === 'banners') loadBanners();
+  else if (name === 'tracking') loadTracking();
 }
 
 function refreshCurrent() { loadPage(currentPage); }
@@ -3795,6 +3835,7 @@ async function openOrderDrawer(id) {
       </div>
       ${isMp ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">Status de pagamento controlado automaticamente pelo Mercado Pago.</p>` : ''}
     </div>
+    ${renderTrackingSection(o)}
     ${o.logs?.length ? `
     <div>
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Histórico do Pedido</div>
@@ -3812,6 +3853,175 @@ async function openOrderDrawer(id) {
 function closeOrderDrawer() {
   document.getElementById('order-drawer').style.transform = 'translateX(100%)';
   document.getElementById('order-drawer-overlay').style.display = 'none';
+}
+
+// Seção de rastreamento dentro do drawer do pedido: histórico completo de eventos
+// (nunca substituído, só acrescentado) + formulário pra adicionar uma atualização manual.
+function renderTrackingSection(o) {
+  const t = o.tracking;
+  const STATUS_OPTIONS = Object.entries(TRACKING_STATUS_LABELS_DV)
+    .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+
+  const eventsHtml = t && t.eventos && t.eventos.length
+    ? t.eventos.slice().reverse().map(ev => `
+      <div class="log-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+        <div style="display:flex;gap:8px;align-items:center;width:100%">
+          <span class="log-level log-level-info">${esc(TRACKING_STATUS_LABELS_DV[ev.status] || ev.status)}</span>
+          <span class="log-ts">${new Date(ev.data).toLocaleString('pt-BR')}</span>
+          <span style="font-size:10px;color:var(--muted);margin-left:auto">${ev.origem === 'manual' ? '✍ manual' : '⚙ sistema'}</span>
+        </div>
+        ${ev.descricao ? `<span class="log-msg" style="padding-left:0">${esc(ev.descricao)}</span>` : ''}
+        ${ev.localizacao ? `<span style="font-size:11px;color:var(--blue)">📍 ${esc(ev.localizacao)}</span>` : ''}
+      </div>`).join('')
+    : '<p style="color:var(--muted);font-size:12px">Nenhum evento de rastreamento ainda.</p>';
+
+  const previsaoHtml = t && t.previsaoPostagem
+    ? `<p style="font-size:12px;color:var(--muted);margin-top:6px">Previsão de postagem: <strong>${new Date(t.previsaoPostagem).toLocaleDateString('pt-BR')}</strong></p>`
+    : '';
+
+  return `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📦 Rastreamento</div>
+      ${previsaoHtml}
+      <div class="log-list" style="max-height:220px;overflow-y:auto;margin-bottom:14px">${eventsHtml}</div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Adicionar atualização</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <select class="input" id="te-status" style="grid-column:1/-1">${STATUS_OPTIONS}</select>
+          <input class="input" id="te-data" type="date"/>
+          <input class="input" id="te-hora" type="time"/>
+          <input class="input" id="te-local" type="text" placeholder="Localização (ex: Belém - PA)" style="grid-column:1/-1"/>
+          <textarea class="input" id="te-desc" placeholder="Descrição da atualização (opcional)" style="grid-column:1/-1;min-height:56px;resize:vertical"></textarea>
+        </div>
+        <button class="btn btn-blue" style="width:100%" onclick="addTrackingEvent('${esc(o.id)}')">➕ Adicionar atualização</button>
+        <div id="te-feedback" style="font-size:12px;display:none;margin-top:8px"></div>
+      </div>
+    </div>
+  `;
+}
+
+async function addTrackingEvent(orderId) {
+  const status = document.getElementById('te-status')?.value;
+  const data = document.getElementById('te-data')?.value || null;
+  const hora = document.getElementById('te-hora')?.value || null;
+  const localizacao = document.getElementById('te-local')?.value.trim() || null;
+  const descricao = document.getElementById('te-desc')?.value.trim() || null;
+  const fb = document.getElementById('te-feedback');
+
+  try {
+    const r = await api.call('POST', `/api/admin/orders/${orderId}/tracking-event`, { status, data, hora, localizacao, descricao });
+    if (r?.ok) {
+      openOrderDrawer(orderId);
+      if (currentPage === 'tracking') loadTracking();
+      if (currentPage === 'orders') loadOrders();
+    } else if (fb) {
+      fb.style.color = 'var(--red)';
+      fb.textContent = r?.error || 'Erro ao adicionar atualização.';
+      fb.style.display = '';
+    }
+  } catch (e) {
+    if (fb) { fb.style.color = 'var(--red)'; fb.textContent = 'Erro: ' + e.message; fb.style.display = ''; }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// RASTREAMENTO DE PEDIDOS
+// ═══════════════════════════════════════════════
+let _trackingPage = 1;
+let _trackingDebounceTimer = null;
+const TRACKING_STATUS_LABELS_DV = {
+  PEDIDO_REALIZADO: 'Pedido realizado', PAGAMENTO_PENDENTE: 'Pagamento pendente', PAGAMENTO_APROVADO: 'Pagamento aprovado',
+  PAGAMENTO_RECUSADO: 'Pagamento recusado', PREPARANDO_ENVIO: 'Preparando pedido', AGUARDANDO_POSTAGEM: 'Aguardando envio',
+  ENVIADO: 'Pedido enviado', OBJETO_POSTADO: 'Objeto postado', RECEBIDO_TRANSPORTADORA: 'Recebido pela transportadora',
+  EM_TRANSITO: 'Em trânsito', CHEGOU_UNIDADE: 'Chegou à unidade de distribuição', SAIU_PARA_ENTREGA: 'Saiu para entrega',
+  ENTREGUE: 'Entregue', TENTATIVA_ENTREGA: 'Tentativa de entrega', ENDERECO_NAO_LOCALIZADO: 'Endereço não localizado',
+  DEVOLVIDO: 'Objeto devolvido', CANCELADO: 'Pedido cancelado',
+};
+
+function loadTrackingDebounced() {
+  clearTimeout(_trackingDebounceTimer);
+  _trackingDebounceTimer = setTimeout(() => { _trackingPage = 1; loadTracking(); }, 400);
+}
+
+async function loadTrackingConfigForm() {
+  try {
+    const cfg = await api.get('/api/admin/tracking/config');
+    if (!cfg) return;
+    const prazoEl = document.getElementById('tracking-prazo-input');
+    const ferEl = document.getElementById('tracking-feriados-input');
+    if (prazoEl) prazoEl.value = cfg.prazoPostagemDiasUteis;
+    if (ferEl) ferEl.value = (cfg.feriados || []).join(', ');
+  } catch {}
+}
+
+async function saveTrackingConfig() {
+  const prazo = document.getElementById('tracking-prazo-input')?.value;
+  const feriadosRaw = document.getElementById('tracking-feriados-input')?.value || '';
+  const feriados = feriadosRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const fb = document.getElementById('tracking-config-feedback');
+  try {
+    const r = await api.call('POST', '/api/admin/tracking/config', { prazoPostagemDiasUteis: prazo, feriados });
+    if (fb) {
+      fb.style.color = r?.ok ? 'var(--green)' : 'var(--red)';
+      fb.textContent = r?.ok ? '✓ Configuração salva.' : (r?.error || 'Erro ao salvar.');
+      fb.style.display = '';
+      setTimeout(() => { if (fb) fb.style.display = 'none'; }, 4000);
+    }
+  } catch (e) {
+    if (fb) { fb.style.color = 'var(--red)'; fb.textContent = 'Erro: ' + e.message; fb.style.display = ''; }
+  }
+}
+
+async function loadTracking(page) {
+  if (page) _trackingPage = page;
+  await loadTrackingConfigForm();
+
+  const stats = await api.get('/api/admin/tracking/stats');
+  if (stats) {
+    document.getElementById('tracking-stats').innerHTML = `
+      <div class="stat-card info"><div class="stat-icon">📦</div><div><div class="stat-value">${stats.total}</div><div class="stat-label">Pedidos pagos</div></div></div>
+      <div class="stat-card warn"><div class="stat-icon">⏳</div><div><div class="stat-value">${stats.aguardandoEnvio}</div><div class="stat-label">Aguardando envio</div></div></div>
+      <div class="stat-card info"><div class="stat-icon">📮</div><div><div class="stat-value">${stats.enviados}</div><div class="stat-label">Enviados</div></div></div>
+      <div class="stat-card info"><div class="stat-icon">🚚</div><div><div class="stat-value">${stats.emTransito}</div><div class="stat-label">Em trânsito</div></div></div>
+      <div class="stat-card info"><div class="stat-icon">🏃</div><div><div class="stat-value">${stats.saiuParaEntrega}</div><div class="stat-label">Saiu p/ entrega</div></div></div>
+      <div class="stat-card ok"><div class="stat-icon">✅</div><div><div class="stat-value">${stats.entregues}</div><div class="stat-label">Entregues</div></div></div>
+      <div class="stat-card err"><div class="stat-icon">⚠️</div><div><div class="stat-value">${stats.problemas}</div><div class="stat-label">Problemas</div></div></div>
+    `;
+  }
+
+  const search = document.getElementById('tracking-search')?.value || '';
+  const params = new URLSearchParams({ status: 'paid', page: _trackingPage, limit: 30 });
+  if (search) params.set('search', search);
+  const data = await api.get('/api/admin/orders?' + params);
+  if (!data) return;
+
+  document.getElementById('tracking-count').textContent = `${data.total} pedido${data.total !== 1 ? 's' : ''}`;
+
+  document.getElementById('tracking-tbody').innerHTML = data.items.length
+    ? data.items.map(o => {
+        const st = (o.tracking && o.tracking.statusAtual) || (o.fulfillmentStatus === 'delivered' ? 'ENTREGUE' : o.fulfillmentStatus === 'shipped' ? 'ENVIADO' : 'AGUARDANDO_POSTAGEM');
+        return `<tr>
+          <td><code style="font-size:11px;cursor:pointer;color:var(--blue)" onclick="openOrderDrawer('${esc(o.id)}')">${o.shortId ? esc(o.shortId) : esc((o.id||'').slice(0,8))+'…'}</code></td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.clientName || o.clientEmail || '—')}</td>
+          <td><span class="badge badge-blue">${esc(TRACKING_STATUS_LABELS_DV[st] || st)}</span></td>
+          <td>${o.trackingCode ? `<code style="font-size:11px">${esc(o.trackingCode)}</code>` : '<span style="color:var(--muted)">—</span>'}</td>
+          <td style="white-space:nowrap;color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleDateString('pt-BR') : '—'}</td>
+          <td><button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="openOrderDrawer('${esc(o.id)}')">Ver</button></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">Nenhum pedido pago encontrado</td></tr>';
+
+  const el = document.getElementById('tracking-pagination');
+  if (el) {
+    el.innerHTML = '';
+    if (data.pages > 1) {
+      const start = Math.max(1, data.page - 2), end = Math.min(data.pages, data.page + 2);
+      for (let i = start; i <= end; i++) {
+        el.innerHTML += `<button class="btn ${i === data.page ? 'btn-blue' : 'btn-ghost'}" onclick="loadTracking(${i})">${i}</button>`;
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════

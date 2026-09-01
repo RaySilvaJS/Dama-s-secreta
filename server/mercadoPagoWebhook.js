@@ -15,6 +15,8 @@ const { getSocket, getGroupId } = require('./whatsapp');
 const mpOrdersPath = path.join(__dirname, 'data', 'mp_orders.json');
 const webhookLogPath = path.join(__dirname, 'data', 'mp_webhook_log.json');
 const usersPath = path.join(__dirname, 'data', 'users.json');
+const configPath = path.join(__dirname, 'data', 'config.json');
+const loadConfig = () => { try { return JSON.parse(fs.readFileSync(configPath, 'utf-8')); } catch { return {}; } };
 
 if (!fs.existsSync(mpOrdersPath)) fs.writeFileSync(mpOrdersPath, '[]', 'utf-8');
 if (!fs.existsSync(webhookLogPath)) fs.writeFileSync(webhookLogPath, '[]', 'utf-8');
@@ -38,6 +40,58 @@ const formatPhoneDisplay = (phone) => {
   if (n.length === 10) return `(${n.slice(0,2)}) ${n.slice(2,6)}-${n.slice(6)}`;
   return phone;
 };
+
+// ── Rastreamento de pedidos (ver server/admin.js pro modelo completo — duplicado
+// aqui de propósito, seguindo o padrão do projeto de helpers por arquivo) ──────────
+const TRACKING_STATUS_LABELS = {
+  PEDIDO_REALIZADO: 'Pedido realizado', PAGAMENTO_APROVADO: 'Pagamento aprovado',
+  PREPARANDO_ENVIO: 'Preparando pedido', AGUARDANDO_POSTAGEM: 'Aguardando envio',
+  ENVIADO: 'Pedido enviado', ENTREGUE: 'Entregue', CANCELADO: 'Pedido cancelado',
+};
+
+function newTrackingObject() {
+  return { codigo: null, transportadora: null, statusAtual: 'PEDIDO_REALIZADO', dataEnvio: null, previsaoPostagem: null, previsaoEntrega: null, notifiedStatuses: [], eventos: [] };
+}
+
+function appendTrackingEvent(order, { status, descricao, localizacao, origem, data }) {
+  if (!order.tracking) order.tracking = newTrackingObject();
+  const t = order.tracking;
+  const now = data || new Date().toISOString();
+  const last = t.eventos[t.eventos.length - 1];
+  const isDuplicate = last && last.status === status && (localizacao || null) === (last.localizacao || null) && (descricao || TRACKING_STATUS_LABELS[status] || status) === last.descricao;
+  if (!isDuplicate) {
+    t.eventos.push({ status, descricao: descricao || TRACKING_STATUS_LABELS[status] || status, data: now, localizacao: localizacao || null, origem: origem || 'sistema' });
+  }
+  t.statusAtual = status;
+  if (status === 'ENVIADO')   { order.fulfillmentStatus = 'shipped';   order.shippedAt = now;   t.dataEnvio = now; }
+  if (status === 'ENTREGUE')  { order.fulfillmentStatus = 'delivered'; order.deliveredAt = now; }
+}
+
+function addBusinessDays(fromIso, days, holidays) {
+  const holidaySet = new Set(holidays || []);
+  const d = new Date(fromIso);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    const iso = d.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6 && !holidaySet.has(iso)) added++;
+  }
+  return d.toISOString();
+}
+
+// Ao aprovar o pagamento, avança automaticamente até "aguardando postagem" — só o
+// cadastro do código de rastreio (via DevOps) marca como ENVIADO de fato.
+function markOrderApprovedTracking(order) {
+  if (!order.tracking) order.tracking = newTrackingObject();
+  appendTrackingEvent(order, { status: 'PAGAMENTO_APROVADO', descricao: 'Pagamento confirmado', origem: 'sistema' });
+  appendTrackingEvent(order, { status: 'PREPARANDO_ENVIO', descricao: 'Pedido em preparação para envio', origem: 'sistema' });
+  const trackCfg = Object.assign({ prazoPostagemDiasUteis: 1, feriados: [] }, loadConfig().trackingConfig || {});
+  const previsao = addBusinessDays(new Date().toISOString(), trackCfg.prazoPostagemDiasUteis, trackCfg.feriados);
+  order.tracking.previsaoPostagem = previsao;
+  const previsaoFmt = new Date(previsao).toLocaleDateString('pt-BR');
+  appendTrackingEvent(order, { status: 'AGUARDANDO_POSTAGEM', descricao: `Aguardando postagem — previsão até ${previsaoFmt}`, origem: 'sistema' });
+}
 
 // Notifica o grupo admin do WhatsApp quando um pedido do Mercado Pago é aprovado —
 // o fluxo legado (payment.js, PIX manual) já faz isso, mas esse aqui nunca fazia,
@@ -188,6 +242,7 @@ async function handlePaymentNotification(dataId, xRequestId, res) {
   if (mpPayment.status === 'approved') {
     order.amountConfirmed = mpPayment.transaction_amount;
     if (!order.paidAt) order.paidAt = new Date().toISOString();
+    if (!wasAlreadyPaid) markOrderApprovedTracking(order);
   }
   order.processedNotificationIds = [...(order.processedNotificationIds || []), notificationKey].slice(-50);
   order.auditLog.push({
@@ -274,6 +329,7 @@ async function handleOrderNotification(dataId, xRequestId, res) {
   if (mappedStatus === 'approved') {
     order.amountConfirmed = totalAmount;
     if (!order.paidAt) order.paidAt = new Date().toISOString();
+    if (!wasAlreadyPaid) markOrderApprovedTracking(order);
   }
   order.processedNotificationIds = [...(order.processedNotificationIds || []), notificationKey].slice(-50);
   order.auditLog.push({

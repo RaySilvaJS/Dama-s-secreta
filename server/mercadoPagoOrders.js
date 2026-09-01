@@ -166,6 +166,13 @@ router.post('/orders', rateLimit(20, 5 * 60 * 1000), (req, res) => {
     auditLog: [{ at: now, type: 'order_created', details: `Pedido criado por ${user.email}` }],
     createdAt: now,
     updatedAt: now,
+    // Rastreamento (ver server/admin.js pro modelo completo) — semeia o primeiro evento
+    // aqui; a aprovação do pagamento (webhook) avança o resto automaticamente.
+    tracking: {
+      codigo: null, transportadora: null, statusAtual: 'PEDIDO_REALIZADO',
+      dataEnvio: null, previsaoPostagem: null, previsaoEntrega: null, notifiedStatuses: [],
+      eventos: [{ status: 'PEDIDO_REALIZADO', descricao: 'Pedido realizado pelo cliente', data: now, localizacao: null, origem: 'sistema' }],
+    },
   };
   orders.push(order);
   saveMpOrders(orders);

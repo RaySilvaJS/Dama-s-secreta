@@ -197,6 +197,7 @@ main {
 }
 .timeline-dot.done { background: #48bb78; color: #fff; }
 .timeline-dot.danger { background: #DC2626; color: #fff; }
+.timeline-dot.warning { background: #D97706; color: #fff; }
 .timeline-dot.current { background: var(--purple); color: #fff; }
 .timeline-line { width: 2px; flex: 1; background: #E5E7EB; margin-top: 2px; }
 .timeline-line.done { background: #48bb78; }
@@ -205,6 +206,7 @@ main {
 .timeline-label { font-size: 14px; font-weight: 700; color: var(--text); }
 .timeline-label.muted { color: var(--muted); font-weight: 600; }
 .timeline-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.timeline-location { font-size: 12px; color: var(--purple); margin-top: 2px; font-weight: 600; }
 
 /* Rastreio */
 .tracking-box {
@@ -213,10 +215,15 @@ main {
   border-radius: 12px; padding: 12px 16px;
 }
 .tracking-code { font-family: monospace; font-size: 14px; font-weight: 700; color: #1D4ED8; }
+.tracking-code.muted { color: var(--muted); font-family: inherit; font-weight: 600; }
+.tracking-box.pending { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.07); }
 .copy-btn {
   border: none; background: #1D4ED8; color: #fff; font-size: 12px; font-weight: 700;
   padding: 7px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; flex-shrink: 0;
 }
+.tracking-wait-msg { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+.external-track-link { display: inline-block; font-size: 12.5px; color: #1D4ED8; font-weight: 700; text-decoration: none; margin-top: 8px; }
+.external-track-link:hover { text-decoration: underline; }
 
 /* Endereço */
 .address-line { font-size: 14px; line-height: 1.5; }
@@ -363,8 +370,66 @@ main {
     return { label: 'Aguardando pagamento', cls: 'status-pending', dotCls: 'dot-pending' };
   }
 
-  // Linha do tempo do pedido, no estilo "Detalhes do envio" do Mercado Livre.
+  // Rótulos amigáveis do rastreamento granular (server/admin.js tem o mesmo mapa —
+  // duplicado de propósito, cada evento já vem com "descricao" pronta do servidor,
+  // isso aqui é só um fallback caso descricao venha vazia).
+  var TRACKING_LABELS = {
+    PEDIDO_REALIZADO: 'Pedido realizado', PAGAMENTO_PENDENTE: 'Pagamento pendente', PAGAMENTO_APROVADO: 'Pagamento aprovado',
+    PAGAMENTO_RECUSADO: 'Pagamento recusado', PREPARANDO_ENVIO: 'Preparando pedido', AGUARDANDO_POSTAGEM: 'Aguardando envio',
+    ENVIADO: 'Pedido enviado', OBJETO_POSTADO: 'Objeto postado', RECEBIDO_TRANSPORTADORA: 'Recebido pela transportadora',
+    EM_TRANSITO: 'Em trânsito', CHEGOU_UNIDADE: 'Chegou à unidade de distribuição', SAIU_PARA_ENTREGA: 'Saiu para entrega',
+    ENTREGUE: 'Entregue', TENTATIVA_ENTREGA: 'Tentativa de entrega', ENDERECO_NAO_LOCALIZADO: 'Endereço não localizado',
+    DEVOLVIDO: 'Objeto devolvido', CANCELADO: 'Pedido cancelado',
+  };
+  var HAPPY_PATH = ['PEDIDO_REALIZADO', 'PAGAMENTO_APROVADO', 'PREPARANDO_ENVIO', 'AGUARDANDO_POSTAGEM', 'ENVIADO', 'EM_TRANSITO', 'SAIU_PARA_ENTREGA', 'ENTREGUE'];
+  var TERMINAL_BAD = ['CANCELADO', 'DEVOLVIDO', 'PAGAMENTO_RECUSADO'];
+  var PROBLEM_STATUSES = ['TENTATIVA_ENTREGA', 'ENDERECO_NAO_LOCALIZADO'];
+
+  // Linha do tempo completa, a partir do histórico real de eventos (order.tracking.eventos).
+  // Mostra tudo que já aconteceu (com data/local) e completa com os próximos passos do
+  // fluxo padrão ainda não alcançados, como "Aguardando atualização" — nunca inventa datas.
   function getTimelineSteps(order) {
+    if (!order.tracking || !order.tracking.eventos || !order.tracking.eventos.length) {
+      return getLegacyTimelineSteps(order); // pedidos antigos, sem o campo tracking ainda
+    }
+
+    const eventos = order.tracking.eventos;
+    const lastEvent = eventos[eventos.length - 1];
+
+    const steps = eventos.map(function (ev, i) {
+      const isLast = i === eventos.length - 1;
+      const isTerminalBad = TERMINAL_BAD.indexOf(ev.status) !== -1;
+      const isProblem = PROBLEM_STATUSES.indexOf(ev.status) !== -1;
+      return {
+        label: ev.descricao || TRACKING_LABELS[ev.status] || ev.status,
+        date: ev.data,
+        localizacao: ev.localizacao,
+        state: isTerminalBad ? 'danger' : isProblem ? 'warning' : (isLast ? 'current' : 'done'),
+      };
+    });
+
+    const stopped = TERMINAL_BAD.indexOf(lastEvent.status) !== -1;
+    if (!stopped) {
+      const happyIdx = HAPPY_PATH.indexOf(lastEvent.status);
+      if (happyIdx !== -1) {
+        const nextStatuses = HAPPY_PATH.slice(happyIdx + 1);
+        if (nextStatuses.length) steps[steps.length - 1].state = 'current';
+        nextStatuses.forEach(function (status) {
+          steps.push({ label: TRACKING_LABELS[status], date: null, localizacao: null, state: 'pending' });
+        });
+      } else {
+        // Status "problema" fora do caminho padrão (ex: tentativa de entrega) — o pedido
+        // ainda pode chegar a "Entregue", então deixa esse próximo passo visível.
+        steps.push({ label: TRACKING_LABELS.ENTREGUE, date: null, localizacao: null, state: 'pending' });
+      }
+    }
+
+    return steps;
+  }
+
+  // Fluxo simples de 4 etapas — usado só pra pedidos antigos, feitos antes do
+  // rastreamento detalhado existir (sem order.tracking.eventos).
+  function getLegacyTimelineSteps(order) {
     const steps = [{ label: 'Pedido realizado', date: order.createdAt, state: 'done' }];
 
     if (order.status === 'cancelled') {
@@ -390,7 +455,7 @@ main {
     const delivered = order.fulfillmentStatus === 'delivered';
     steps.push({
       label: 'Pedido enviado', date: order.shippedAt,
-      state: delivered || shipped ? 'done' : (order.status === 'paid' ? 'pending' : 'pending')
+      state: delivered || shipped ? 'done' : 'pending'
     });
     steps.push({
       label: 'Pedido entregue', date: order.deliveredAt,
@@ -402,11 +467,11 @@ main {
 
   function renderTimeline(steps) {
     return '<div class="timeline">' + steps.map(function (s, i) {
-      const dotCls = s.state === 'done' ? 'done' : s.state === 'danger' ? 'danger' : s.state === 'current' ? 'current' : '';
+      const dotCls = s.state === 'done' ? 'done' : s.state === 'danger' ? 'danger' : s.state === 'warning' ? 'warning' : s.state === 'current' ? 'current' : '';
       const lineCls = s.state === 'done' ? 'done' : '';
       const icon = s.state === 'done'
         ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-        : s.state === 'danger'
+        : (s.state === 'danger' || s.state === 'warning')
         ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
         : (i + 1);
       return '<div class="timeline-step">' +
@@ -416,7 +481,8 @@ main {
         '</div>' +
         '<div class="timeline-content">' +
           '<div class="timeline-label' + (s.state === 'pending' ? ' muted' : '') + '">' + escapeHtml(s.label) + '</div>' +
-          (s.date ? '<div class="timeline-date">' + formatDate(s.date) + '</div>' : '') +
+          (s.date ? '<div class="timeline-date">' + formatDate(s.date) + '</div>' : (s.state === 'pending' ? '<div class="timeline-date">Aguardando atualização</div>' : '')) +
+          (s.localizacao ? '<div class="timeline-location">' + escapeHtml(s.localizacao) + '</div>' : '') +
         '</div>' +
       '</div>';
     }).join('') + '</div>';
@@ -434,15 +500,28 @@ main {
       '</div>';
     }).join('');
 
-    const trackingHtml = order.trackingCode ? (
-      '<div class="detail-block">' +
-        '<div class="detail-block-title">Código de Rastreio</div>' +
-        '<div class="tracking-box">' +
-          '<span class="tracking-code">' + escapeHtml(order.trackingCode) + '</span>' +
-          '<button class="copy-btn" onclick="copyTrackingCode(\'' + escapeHtml(order.trackingCode).replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', this)">Copiar</button>' +
-        '</div>' +
-      '</div>'
-    ) : '';
+    let trackingHtml = '';
+    if (order.trackingCode) {
+      const codeEsc = escapeHtml(order.trackingCode).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      trackingHtml =
+        '<div class="detail-block">' +
+          '<div class="detail-block-title">Código de Rastreio</div>' +
+          '<div class="tracking-box">' +
+            '<span class="tracking-code">' + escapeHtml(order.trackingCode) + '</span>' +
+            '<button class="copy-btn" onclick="copyTrackingCode(\'' + codeEsc + '\', this)">Copiar</button>' +
+          '</div>' +
+          '<a class="external-track-link" href="https://rastreamento.correios.com.br/app/index.php?objetos=' + encodeURIComponent(order.trackingCode) + '" target="_blank" rel="noopener noreferrer">Rastrear externamente ↗</a>' +
+        '</div>';
+    } else if (order.status === 'paid') {
+      trackingHtml =
+        '<div class="detail-block">' +
+          '<div class="detail-block-title">Código de Rastreio</div>' +
+          '<div class="tracking-box pending">' +
+            '<span class="tracking-code muted">Ainda não disponível</span>' +
+          '</div>' +
+          '<p class="tracking-wait-msg">Seu pedido está sendo preparado para envio. Assim que for enviado, o código de rastreio será disponibilizado aqui.</p>' +
+        '</div>';
+    }
 
     const addressHtml = order.address ? (
       '<div class="detail-block">' +
@@ -595,6 +674,14 @@ main {
       const data = await r.json();
       if (data.success) {
         renderOrders(data.orders);
+        // Link direto de um pedido especifico (ex: veio do link do WhatsApp de envio)
+        // ?pedido=<id> abre e rola ate o card daquele pedido automaticamente.
+        const targetId = new URLSearchParams(window.location.search).get('pedido');
+        if (targetId && document.getElementById('detail-' + targetId)) {
+          window.toggleOrderDetail(targetId);
+          const card = document.getElementById('toggle-' + targetId);
+          if (card) setTimeout(function () { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+        }
       } else {
         document.getElementById('loading-state').textContent = 'Erro ao carregar pedidos.';
       }
