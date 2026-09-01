@@ -790,9 +790,63 @@ router.get('/tracker/stats', adminAuth, (req, res) => {
   res.json(tracker.snap());
 });
 
+// ── Merge de pedidos: legado (PIX manual, payments.json) + Mercado Pago (mp_orders.json) ──
+// O projeto tem dois sistemas de pedido que nunca foram conectados (ver mercadoPagoOrders.js):
+// o legado grava em payments.json e notifica o WhatsApp; o do Mercado Pago (o que realmente
+// processa cartão/Pix/boleto hoje) grava em mp_orders.json e nunca aparecia aqui. Normaliza os
+// pedidos do Mercado Pago pro mesmo formato que a tela de Pedidos já espera.
+const MP_STATUS_TO_LEGACY = {
+  approved:        'paid',
+  pending_payment: 'pending',
+  pending:         'pending',
+  in_process:      'pending',
+  rejected:        'refused',
+  cancelled:       'cancelled',
+  refunded:        'refused',
+  charged_back:    'refused',
+};
+
+function loadMpOrdersNormalized() {
+  let mpOrders = [];
+  let users = [];
+  try { mpOrders = JSON.parse(fs.readFileSync(path.join(DATA, 'mp_orders.json'), 'utf-8')); } catch { return []; }
+  try { users = JSON.parse(fs.readFileSync(path.join(DATA, 'users.json'), 'utf-8')); } catch {}
+
+  return mpOrders.map(o => {
+    const user = users.find(u => u.id === o.userId) || {};
+    const address = (user.enderecos || []).find(a => a.id === o.addressId) || null;
+    const productNames = (o.items || []).map(i => i.name).filter(Boolean);
+    const product = productNames.length > 1
+      ? `${productNames[0]} + ${productNames.length - 1} item${productNames.length > 2 ? 's' : ''}`
+      : (productNames[0] || '—');
+
+    return {
+      id:          o.id,
+      shortId:     o.externalReference ? o.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : null,
+      source:      'mercadopago',
+      product,
+      productName: product,
+      amount:      o.amountConfirmed ?? o.amountExpected,
+      status:      MP_STATUS_TO_LEGACY[o.status] || o.status,
+      createdAt:   o.createdAt,
+      paidAt:      o.paidAt || null,
+      clientName:  user.nome || null,
+      clientEmail: user.email || null,
+      clientPhone: user.whatsapp || null,
+      clientCpf:   user.cpf || null,
+      cep:         address ? address.cep : null,
+      address,
+      paymentMethod: o.mpPaymentTypeId || null,
+      qrCode:      null,
+      proofs:      [],
+      logs: (o.auditLog || []).map(l => ({ timestamp: l.at, type: l.type, details: l.details })),
+    };
+  });
+}
+
 router.get('/orders/stats', adminAuth, (req, res) => {
   try {
-    const payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8'));
+    const payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8')).concat(loadMpOrdersNormalized());
     const today = new Date().toISOString().slice(0, 10);
     const todayPayments = payments.filter(p => (p.createdAt || '').startsWith(today));
     res.json({
@@ -1341,7 +1395,7 @@ router.get('/financial/pending-approval', adminAuth, (req, res) => {
 // ---- Pedidos (orders full list) ----
 router.get('/orders', adminAuth, (req, res) => {
   try {
-    let payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8'));
+    let payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8')).concat(loadMpOrdersNormalized());
     const { status, search, dateFrom, dateTo, page = 1, limit = 30 } = req.query;
 
     if (status && status !== 'all') payments = payments.filter(p => p.status === status);
@@ -1372,7 +1426,14 @@ router.patch('/orders/:id', adminAuth, async (req, res) => {
   try {
     const payments = JSON.parse(fs.readFileSync(path.join(DATA, 'payments.json'), 'utf-8'));
     const idx = payments.findIndex(p => p.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Pedido não encontrado.' });
+    if (idx === -1) {
+      // Pedidos do Mercado Pago (mp_orders.json) têm o status controlado automaticamente
+      // pelo webhook do MP — não dá pra alterar manualmente por aqui.
+      if (loadMpOrdersNormalized().some(o => o.id === req.params.id)) {
+        return res.status(400).json({ error: 'Este é um pedido do Mercado Pago — o status é atualizado automaticamente pelo pagamento, não pode ser alterado manualmente.' });
+      }
+      return res.status(404).json({ error: 'Pedido não encontrado.' });
+    }
 
     const prevStatus = payments[idx].status;
     const newStatus  = req.body.status;

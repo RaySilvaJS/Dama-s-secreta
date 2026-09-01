@@ -10,15 +10,85 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const mercadopago = require('./mercadopago');
+const { getSocket, getGroupId } = require('./whatsapp');
 
 const mpOrdersPath = path.join(__dirname, 'data', 'mp_orders.json');
 const webhookLogPath = path.join(__dirname, 'data', 'mp_webhook_log.json');
+const usersPath = path.join(__dirname, 'data', 'users.json');
 
 if (!fs.existsSync(mpOrdersPath)) fs.writeFileSync(mpOrdersPath, '[]', 'utf-8');
 if (!fs.existsSync(webhookLogPath)) fs.writeFileSync(webhookLogPath, '[]', 'utf-8');
 
 const loadMpOrders = () => { try { return JSON.parse(fs.readFileSync(mpOrdersPath, 'utf-8')); } catch { return []; } };
 const saveMpOrders = (o) => fs.writeFileSync(mpOrdersPath, JSON.stringify(o, null, 2), 'utf-8');
+const loadUsers = () => { try { return JSON.parse(fs.readFileSync(usersPath, 'utf-8')); } catch { return []; } };
+
+const formatBRL = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatCpfDisplay = (cpf) => {
+  if (!cpf) return 'Não informado';
+  const d = String(cpf).replace(/\D/g, '');
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+};
+const formatPhoneDisplay = (phone) => {
+  if (!phone) return 'Não informado';
+  const d = String(phone).replace(/\D/g, '');
+  const n = d.startsWith('55') ? d.slice(2) : d;
+  if (n.length === 11) return `(${n.slice(0,2)}) ${n.slice(2,7)}-${n.slice(7)}`;
+  if (n.length === 10) return `(${n.slice(0,2)}) ${n.slice(2,6)}-${n.slice(6)}`;
+  return phone;
+};
+
+// Notifica o grupo admin do WhatsApp quando um pedido do Mercado Pago é aprovado —
+// o fluxo legado (payment.js, PIX manual) já faz isso, mas esse aqui nunca fazia,
+// deixando vendas reais via Mercado Pago totalmente invisíveis pra loja.
+async function notifyGroupOrderApproved(order) {
+  const sock = getSocket();
+  const groupId = getGroupId();
+  if (!sock || !groupId) {
+    console.error(`[MP-WEBHOOK] WhatsApp offline — pedido ${order.externalReference} aprovado sem notificação.`);
+    return;
+  }
+
+  const users = loadUsers();
+  const user = users.find(u => u.id === order.userId) || {};
+  const address = (user.enderecos || []).find(a => a.id === order.addressId) || null;
+  const addrLine = address
+    ? `${address.rua}, ${address.numero}${address.complemento ? ' ' + address.complemento : ''} — ${address.bairro}, ${address.cidade}/${address.estado} · CEP ${address.cep}`
+    : 'Não informado';
+  const itemsLines = (order.items || []).map(i => `  • ${i.quantity}x ${i.name} — ${formatBRL(i.lineTotal)}`).join('\n');
+  const shortDisplay = order.externalReference ? order.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : order.id.slice(0, 8);
+
+  const lines = [
+    '✅ *PAGAMENTO APROVADO — MERCADO PAGO*',
+    '━━━━━━━━━━━━━━━',
+    '',
+    `📋 *Pedido:* #${shortDisplay}`,
+    `🆔 *ID:* ${order.id}`,
+    '',
+    '🛍️ *Itens*',
+    itemsLines || '  —',
+    `💰 *Total:* ${formatBRL(order.amountConfirmed ?? order.amountExpected)}`,
+    order.mpPaymentTypeId ? `💳 *Forma de pagamento:* ${order.mpPaymentTypeId}` : null,
+    '',
+    '👤 *Dados do Cliente*',
+    `Nome:     ${user.nome || 'Não informado'}`,
+    `CPF:      ${formatCpfDisplay(user.cpf)}`,
+    `Telefone: ${formatPhoneDisplay(user.whatsapp)}`,
+    `E-mail:   ${user.email || 'Não informado'}`,
+    '',
+    '📦 *Endereço de Entrega*',
+    addrLine,
+    '━━━━━━━━━━━━━━━',
+  ].filter(l => l !== null).join('\n');
+
+  try {
+    await sock.sendMessage(groupId, { text: lines });
+    console.log(`[MP-WEBHOOK] Pedido ${order.externalReference} aprovado — grupo notificado.`);
+  } catch (err) {
+    console.error('[MP-WEBHOOK] Erro ao notificar grupo:', err.message);
+  }
+}
 
 // Log de auditoria das notificações recebidas — apenas metadados, nunca dados sensíveis.
 const loadWebhookLog = () => { try { return JSON.parse(fs.readFileSync(webhookLogPath, 'utf-8')); } catch { return []; } };
@@ -114,6 +184,7 @@ async function handlePaymentNotification(dataId, xRequestId, res) {
   order.mpPaymentTypeId   = mpPayment.payment_type_id || order.mpPaymentTypeId;
   order.mpStatusDetail    = mpPayment.status_detail || null;
   order.status            = mpPayment.status; // approved | pending | in_process | rejected | cancelled | refunded | charged_back
+  const wasAlreadyPaid = !!order.paidAt;
   if (mpPayment.status === 'approved') {
     order.amountConfirmed = mpPayment.transaction_amount;
     if (!order.paidAt) order.paidAt = new Date().toISOString();
@@ -129,6 +200,11 @@ async function handlePaymentNotification(dataId, xRequestId, res) {
   saveMpOrders(orders);
 
   appendWebhookLog({ type: 'processed', topic: 'payment', paymentId: String(mpPayment.id), orderId: order.id, status: mpPayment.status });
+
+  if (mpPayment.status === 'approved' && !wasAlreadyPaid) {
+    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp:', err.message));
+  }
+
   return res.status(200).json({ received: true, processed: true });
 }
 
@@ -194,6 +270,7 @@ async function handleOrderNotification(dataId, xRequestId, res) {
   order.mpPaymentTypeId   = (lastPayment && lastPayment.payment_method && lastPayment.payment_method.type) || order.mpPaymentTypeId;
   order.mpStatusDetail    = mpOrder.status_detail || null;
   order.status            = mappedStatus; // approved | pending | in_process | rejected | cancelled | refunded | charged_back
+  const wasAlreadyPaid = !!order.paidAt;
   if (mappedStatus === 'approved') {
     order.amountConfirmed = totalAmount;
     if (!order.paidAt) order.paidAt = new Date().toISOString();
@@ -209,6 +286,11 @@ async function handleOrderNotification(dataId, xRequestId, res) {
   saveMpOrders(orders);
 
   appendWebhookLog({ type: 'processed', topic: 'order', mpOrderId: String(mpOrder.id), orderId: order.id, status: mappedStatus });
+
+  if (mappedStatus === 'approved' && !wasAlreadyPaid) {
+    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp:', err.message));
+  }
+
   return res.status(200).json({ received: true, processed: true });
 }
 
