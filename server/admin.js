@@ -839,6 +839,10 @@ function loadMpOrdersNormalized() {
       paymentMethod: o.mpPaymentTypeId || null,
       qrCode:      null,
       proofs:      [],
+      fulfillmentStatus: o.fulfillmentStatus || 'pending',
+      trackingCode: o.trackingCode || null,
+      shippedAt:    o.shippedAt || null,
+      deliveredAt:  o.deliveredAt || null,
       logs: (o.auditLog || []).map(l => ({ timestamp: l.at, type: l.type, details: l.details })),
     };
   });
@@ -1491,6 +1495,93 @@ router.patch('/orders/:id', adminAuth, async (req, res) => {
     }
 
     res.json({ ok: true, order: payments[idx] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Status de envio (separado do status de pagamento) — funciona tanto pra pedidos
+// legados (payments.json) quanto do Mercado Pago (mp_orders.json), já que a entrega
+// é independente de qual sistema processou o pagamento.
+router.patch('/orders/:id/fulfillment', adminAuth, async (req, res) => {
+  try {
+    const { fulfillmentStatus, trackingCode } = req.body || {};
+    if (!['shipped', 'delivered'].includes(fulfillmentStatus)) {
+      return res.status(400).json({ error: 'fulfillmentStatus deve ser "shipped" ou "delivered".' });
+    }
+
+    const now = new Date().toISOString();
+    let clientPhone = null, clientName = null, shortDisplay = null, productLabel = null;
+
+    const paymentsFile = path.join(DATA, 'payments.json');
+    const payments = JSON.parse(fs.readFileSync(paymentsFile, 'utf-8'));
+    let idx = payments.findIndex(p => p.id === req.params.id);
+
+    if (idx !== -1) {
+      const order = payments[idx];
+      order.fulfillmentStatus = fulfillmentStatus;
+      if (trackingCode !== undefined) order.trackingCode = trackingCode || null;
+      if (fulfillmentStatus === 'shipped')   order.shippedAt   = now;
+      if (fulfillmentStatus === 'delivered') order.deliveredAt = now;
+      order.logs = order.logs || [];
+      order.logs.push({
+        type: 'fulfillment_update',
+        admin: req.adminUser?.email || 'devops',
+        details: `Envio: ${fulfillmentStatus}${trackingCode ? ' | rastreio: ' + trackingCode : ''}`,
+        timestamp: now,
+      });
+      fs.writeFileSync(paymentsFile, JSON.stringify(payments, null, 2));
+      clientPhone  = order.clientPhone;
+      clientName   = order.clientName;
+      shortDisplay = order.shortId ? `#${order.shortId}` : order.id.slice(0, 8);
+      productLabel = order.productName || order.productId;
+    } else {
+      const mpOrdersFile = path.join(DATA, 'mp_orders.json');
+      const mpOrders = JSON.parse(fs.readFileSync(mpOrdersFile, 'utf-8'));
+      idx = mpOrders.findIndex(o => o.id === req.params.id);
+      if (idx === -1) return res.status(404).json({ error: 'Pedido não encontrado.' });
+
+      const order = mpOrders[idx];
+      order.fulfillmentStatus = fulfillmentStatus;
+      if (trackingCode !== undefined) order.trackingCode = trackingCode || null;
+      if (fulfillmentStatus === 'shipped')   order.shippedAt   = now;
+      if (fulfillmentStatus === 'delivered') order.deliveredAt = now;
+      order.auditLog = order.auditLog || [];
+      order.auditLog.push({ at: now, type: 'fulfillment_update', details: `${fulfillmentStatus}${trackingCode ? ' | rastreio: ' + trackingCode : ''}` });
+      fs.writeFileSync(mpOrdersFile, JSON.stringify(mpOrders, null, 2));
+
+      const users = JSON.parse(fs.readFileSync(path.join(DATA, 'users.json'), 'utf-8'));
+      const user = users.find(u => u.id === order.userId) || {};
+      clientPhone  = user.whatsapp || null;
+      clientName   = user.nome || null;
+      shortDisplay = order.externalReference ? order.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : order.id.slice(0, 8);
+      productLabel = (order.items || []).map(i => i.name).filter(Boolean).join(', ');
+    }
+
+    audit.append('order_fulfillment_change', req.adminUser?.email || 'devops', req.ip, { orderId: req.params.id, fulfillmentStatus, trackingCode: trackingCode || null });
+
+    if (clientPhone) {
+      const lines = fulfillmentStatus === 'shipped'
+        ? [
+            '📦 *Pedido Enviado!*',
+            '',
+            `Olá${clientName ? ', ' + clientName : ''}!`,
+            `Seu pedido #${shortDisplay} *saiu para entrega*.`,
+            productLabel ? `🛍️ Produto: ${productLabel}` : null,
+            trackingCode ? `🔎 Código de rastreio: ${trackingCode}` : null,
+            '',
+            'Você pode acompanhar tudo em "Meus Pedidos" no site. Obrigado pela compra! 💗',
+          ].filter(Boolean).join('\n')
+        : [
+            '✅ *Pedido Entregue!*',
+            '',
+            `Olá${clientName ? ', ' + clientName : ''}!`,
+            `Seu pedido #${shortDisplay} foi marcado como *entregue*.`,
+            '',
+            'Esperamos que você ame sua compra! Qualquer coisa, estamos por aqui. 💗',
+          ].join('\n');
+      sendToClient(clientPhone, lines).catch(() => {});
+    }
+
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

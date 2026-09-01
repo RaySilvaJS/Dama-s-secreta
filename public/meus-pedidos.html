@@ -114,6 +114,8 @@ main {
 .status-pending { background: rgba(237,137,54,.12); color: #c05621; }
 .status-awaiting { background: rgba(201,61,114,.1); color: var(--purple); }
 .status-paid { background: rgba(72,187,120,.12); color: #276749; }
+.status-shipped { background: rgba(37,99,235,.12); color: #1D4ED8; }
+.status-cancelled { background: rgba(220,38,38,.1); color: #B91C1C; }
 .order-meta {
   display: flex;
   gap: 24px;
@@ -146,6 +148,86 @@ main {
 .dot-pending { background: #c05621; }
 .dot-awaiting { background: var(--purple); }
 .dot-paid { background: #48bb78; }
+.dot-shipped { background: #2563EB; }
+.dot-cancelled { background: #DC2626; }
+
+/* ── Itens do pedido (thumb) ───────────────────────────────────────────── */
+.order-items-preview { display: flex; align-items: center; gap: 12px; }
+.order-thumb {
+  width: 56px; height: 56px; border-radius: 12px; object-fit: cover;
+  border: 1px solid rgba(0,0,0,.06); background: #FAFAFA; flex-shrink: 0;
+}
+.order-items-extra { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ── Toggle "Ver detalhes" ─────────────────────────────────────────────── */
+.order-toggle-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 16px; padding: 9px 16px; border-radius: 10px;
+  border: 1.5px solid rgba(201,61,114,.25); background: transparent;
+  color: var(--purple); font-size: 13px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: background .2s;
+}
+.order-toggle-btn:hover { background: rgba(201,61,114,.06); }
+.order-toggle-btn svg { transition: transform .2s; }
+.order-toggle-btn.open svg { transform: rotate(180deg); }
+
+/* ── Painel de detalhes (itens, timeline, endereco) ───────────────────── */
+.order-detail { display: none; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(0,0,0,.06); }
+.order-detail.open { display: block; }
+.detail-block { margin-bottom: 22px; }
+.detail-block:last-child { margin-bottom: 0; }
+.detail-block-title {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px;
+}
+.detail-item-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.detail-item-row + .detail-item-row { border-top: 1px solid rgba(0,0,0,.04); }
+.detail-item-name { font-size: 14px; font-weight: 600; flex: 1; }
+.detail-item-qty { font-size: 12px; color: var(--muted); }
+.detail-item-price { font-size: 14px; font-weight: 700; color: var(--text); flex-shrink: 0; }
+
+/* Timeline vertical */
+.timeline { display: flex; flex-direction: column; }
+.timeline-step { display: flex; gap: 14px; position: relative; padding-bottom: 22px; }
+.timeline-step:last-child { padding-bottom: 0; }
+.timeline-marker { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.timeline-dot {
+  width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: #E5E7EB; color: #9CA3AF; flex-shrink: 0; z-index: 1;
+}
+.timeline-dot.done { background: #48bb78; color: #fff; }
+.timeline-dot.danger { background: #DC2626; color: #fff; }
+.timeline-dot.current { background: var(--purple); color: #fff; }
+.timeline-line { width: 2px; flex: 1; background: #E5E7EB; margin-top: 2px; }
+.timeline-line.done { background: #48bb78; }
+.timeline-step:last-child .timeline-line { display: none; }
+.timeline-content { padding-top: 1px; }
+.timeline-label { font-size: 14px; font-weight: 700; color: var(--text); }
+.timeline-label.muted { color: var(--muted); font-weight: 600; }
+.timeline-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Rastreio */
+.tracking-box {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: rgba(37,99,235,.06); border: 1px solid rgba(37,99,235,.15);
+  border-radius: 12px; padding: 12px 16px;
+}
+.tracking-code { font-family: monospace; font-size: 14px; font-weight: 700; color: #1D4ED8; }
+.copy-btn {
+  border: none; background: #1D4ED8; color: #fff; font-size: 12px; font-weight: 700;
+  padding: 7px 12px; border-radius: 8px; cursor: pointer; font-family: inherit; flex-shrink: 0;
+}
+
+/* Endereço */
+.address-line { font-size: 14px; line-height: 1.5; }
+
+/* Comprar novamente */
+.buy-again-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 4px; padding: 11px 20px; border-radius: 10px;
+  border: none; background: var(--text); color: #fff;
+  font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
 .empty-state {
   text-align: center;
   padding: 80px 20px;
@@ -269,16 +351,127 @@ main {
     return '#' + id.replace(/-/g, '').slice(0, 8).toUpperCase();
   }
 
-  function statusInfo(status) {
-    switch (status) {
-      case 'paid':
-        return { label: 'Pago', cls: 'status-paid', dotCls: 'dot-paid' };
-      case 'awaiting_validation':
-        return { label: 'Comprovante enviado', cls: 'status-awaiting', dotCls: 'dot-awaiting' };
-      case 'pending':
-      default:
-        return { label: 'Aguardando pagamento', cls: 'status-pending', dotCls: 'dot-pending' };
+  // Status combinado (pagamento + envio) pro selo do card — a mesma lógica
+  // que o Mercado Livre usa: mostra sempre o estágio mais avançado do pedido.
+  function combinedStatusInfo(order) {
+    if (order.status === 'cancelled') return { label: 'Cancelado', cls: 'status-cancelled', dotCls: 'dot-cancelled' };
+    if (order.status === 'refused')   return { label: 'Pagamento recusado', cls: 'status-cancelled', dotCls: 'dot-cancelled' };
+    if (order.fulfillmentStatus === 'delivered') return { label: 'Entregue', cls: 'status-paid', dotCls: 'dot-paid' };
+    if (order.fulfillmentStatus === 'shipped')   return { label: 'A caminho', cls: 'status-shipped', dotCls: 'dot-shipped' };
+    if (order.status === 'paid') return { label: 'Pago — preparando envio', cls: 'status-paid', dotCls: 'dot-paid' };
+    if (order.status === 'awaiting_validation') return { label: 'Comprovante em análise', cls: 'status-awaiting', dotCls: 'dot-awaiting' };
+    return { label: 'Aguardando pagamento', cls: 'status-pending', dotCls: 'dot-pending' };
+  }
+
+  // Linha do tempo do pedido, no estilo "Detalhes do envio" do Mercado Livre.
+  function getTimelineSteps(order) {
+    const steps = [{ label: 'Pedido realizado', date: order.createdAt, state: 'done' }];
+
+    if (order.status === 'cancelled') {
+      steps.push({ label: 'Pedido cancelado', date: null, state: 'danger' });
+      return steps;
     }
+    if (order.status === 'refused') {
+      steps.push({ label: 'Pagamento recusado' + (order.refuseReason ? ': ' + order.refuseReason : ''), date: null, state: 'danger' });
+      return steps;
+    }
+
+    if (order.status === 'awaiting_validation') {
+      steps.push({ label: 'Comprovante em análise', date: null, state: 'current' });
+      steps.push({ label: 'Pagamento aprovado', date: null, state: 'pending' });
+    } else {
+      steps.push({
+        label: 'Pagamento aprovado', date: order.paidAt,
+        state: order.status === 'paid' ? 'done' : 'current'
+      });
+    }
+
+    const shipped   = order.fulfillmentStatus === 'shipped' || order.fulfillmentStatus === 'delivered';
+    const delivered = order.fulfillmentStatus === 'delivered';
+    steps.push({
+      label: 'Pedido enviado', date: order.shippedAt,
+      state: delivered || shipped ? 'done' : (order.status === 'paid' ? 'pending' : 'pending')
+    });
+    steps.push({
+      label: 'Pedido entregue', date: order.deliveredAt,
+      state: delivered ? 'done' : 'pending'
+    });
+
+    return steps;
+  }
+
+  function renderTimeline(steps) {
+    return '<div class="timeline">' + steps.map(function (s, i) {
+      const dotCls = s.state === 'done' ? 'done' : s.state === 'danger' ? 'danger' : s.state === 'current' ? 'current' : '';
+      const lineCls = s.state === 'done' ? 'done' : '';
+      const icon = s.state === 'done'
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        : s.state === 'danger'
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+        : (i + 1);
+      return '<div class="timeline-step">' +
+        '<div class="timeline-marker">' +
+          '<div class="timeline-dot ' + dotCls + '">' + icon + '</div>' +
+          '<div class="timeline-line ' + lineCls + '"></div>' +
+        '</div>' +
+        '<div class="timeline-content">' +
+          '<div class="timeline-label' + (s.state === 'pending' ? ' muted' : '') + '">' + escapeHtml(s.label) + '</div>' +
+          (s.date ? '<div class="timeline-date">' + formatDate(s.date) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function renderOrderDetail(order) {
+    const itemsHtml = order.items.map(function (it) {
+      return '<div class="detail-item-row">' +
+        '<img class="order-thumb" src="' + escapeHtml(it.image || '') + '" alt="" onerror="this.style.visibility=\'hidden\'"/>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="detail-item-name">' + escapeHtml(it.name) + '</div>' +
+          '<div class="detail-item-qty">Qtd: ' + it.quantity + '</div>' +
+        '</div>' +
+        '<div class="detail-item-price">' + formatBRL(it.lineTotal) + '</div>' +
+      '</div>';
+    }).join('');
+
+    const trackingHtml = order.trackingCode ? (
+      '<div class="detail-block">' +
+        '<div class="detail-block-title">Código de Rastreio</div>' +
+        '<div class="tracking-box">' +
+          '<span class="tracking-code">' + escapeHtml(order.trackingCode) + '</span>' +
+          '<button class="copy-btn" onclick="copyTrackingCode(\'' + escapeHtml(order.trackingCode).replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', this)">Copiar</button>' +
+        '</div>' +
+      '</div>'
+    ) : '';
+
+    const addressHtml = order.address ? (
+      '<div class="detail-block">' +
+        '<div class="detail-block-title">Endereço de Entrega</div>' +
+        '<div class="address-line">' +
+          escapeHtml(order.address.rua) + ', ' + escapeHtml(order.address.numero) +
+          (order.address.complemento ? ' – ' + escapeHtml(order.address.complemento) : '') + '<br/>' +
+          escapeHtml(order.address.bairro) + ', ' + escapeHtml(order.address.cidade) + '/' + escapeHtml(order.address.estado) +
+          ' · CEP ' + escapeHtml(order.address.cep) +
+        '</div>' +
+      '</div>'
+    ) : '';
+
+    return '<div class="order-detail" id="detail-' + order.id + '">' +
+      '<div class="detail-block">' +
+        '<div class="detail-block-title">Itens do Pedido</div>' +
+        itemsHtml +
+      '</div>' +
+      '<div class="detail-block">' +
+        '<div class="detail-block-title">Acompanhamento</div>' +
+        renderTimeline(getTimelineSteps(order)) +
+      '</div>' +
+      trackingHtml +
+      addressHtml +
+      '<button class="buy-again-btn" onclick="buyAgain(\'' + order.id + '\')">' +
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+        'Comprar novamente' +
+      '</button>' +
+    '</div>';
   }
 
   function renderOrders(orders) {
@@ -297,16 +490,25 @@ main {
     }
 
     const sortedOrders = [...orders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    _ordersById = {};
+    sortedOrders.forEach(function (o) { _ordersById[o.id] = o; });
 
     let html = '<div class="orders-summary"><span class="orders-count">' + sortedOrders.length + '</span><span>pedido' + (sortedOrders.length !== 1 ? 's' : '') + ' encontrado' + (sortedOrders.length !== 1 ? 's' : '') + '</span></div>';
 
     sortedOrders.forEach(function (order) {
-      const st = statusInfo(order.status);
+      const st = combinedStatusInfo(order);
+      const firstItem = order.items[0] || {};
+      const extraCount = order.items.length - 1;
+
       html += '<div class="order-card">' +
         '<div class="order-header">' +
-          '<div>' +
-            '<div class="order-id">Pedido ' + shortId(order.id) + '</div>' +
-            '<div class="order-product">' + escapeHtml(order.productName || order.productId || 'Produto') + '</div>' +
+          '<div class="order-items-preview">' +
+            '<img class="order-thumb" src="' + escapeHtml(firstItem.image || '') + '" alt="" onerror="this.style.visibility=\'hidden\'"/>' +
+            '<div>' +
+              '<div class="order-id">Pedido ' + (order.shortId ? '#' + escapeHtml(order.shortId) : shortId(order.id)) + '</div>' +
+              '<div class="order-product">' + escapeHtml(firstItem.name || 'Produto') + '</div>' +
+              (extraCount > 0 ? '<div class="order-items-extra">+ ' + extraCount + ' outro' + (extraCount > 1 ? 's' : '') + ' item' + (extraCount > 1 ? 's' : '') + '</div>' : '') +
+            '</div>' +
           '</div>' +
           '<span class="order-status ' + st.cls + '"><span class="dot ' + st.dotCls + '"></span>' + st.label + '</span>' +
         '</div>' +
@@ -314,6 +516,11 @@ main {
           '<div class="order-meta-item"><span class="label">Valor Total</span><span class="val price">' + formatBRL(order.amount) + '</span></div>' +
           '<div class="order-meta-item"><span class="label">Data</span><span class="val">' + formatDate(order.createdAt) + '</span></div>' +
         '</div>' +
+        '<button class="order-toggle-btn" id="toggle-' + order.id + '" onclick="toggleOrderDetail(\'' + order.id + '\')">' +
+          'Ver detalhes do pedido' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
+        '</button>' +
+        renderOrderDetail(order) +
       '</div>';
     });
 
@@ -323,6 +530,63 @@ main {
   function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+
+  let _ordersById = {};
+
+  window.toggleOrderDetail = function (id) {
+    const panel = document.getElementById('detail-' + id);
+    const btn = document.getElementById('toggle-' + id);
+    if (!panel) return;
+    const isOpen = panel.classList.toggle('open');
+    if (btn) btn.classList.toggle('open', isOpen);
+  };
+
+  window.copyTrackingCode = function (code, btn) {
+    const done = function () {
+      if (!btn) return;
+      const original = btn.textContent;
+      btn.textContent = 'Copiado!';
+      setTimeout(function () { btn.textContent = original; }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(function () { prompt('Copie o código:', code); });
+    } else {
+      prompt('Copie o código:', code);
+    }
+  };
+
+  window.buyAgain = function (orderId) {
+    const order = _ordersById[orderId];
+    if (!order) return;
+    let cart = [];
+    try { cart = JSON.parse(localStorage.getItem('cart') || '[]'); } catch (e) {}
+
+    order.items.forEach(function (it) {
+      const existing = cart.find(function (c) { return c.id === it.id && !c.tamanho && !c.cor; });
+      if (existing) {
+        existing.quantidade += it.quantity;
+      } else {
+        cart.push({
+          id: it.id,
+          nome: it.name,
+          preco: it.unitPrice,
+          precoOriginal: null,
+          descontoHoje: 0,
+          brinde: null,
+          freteGratis: false,
+          retiradaDisponivel: false,
+          imagem: it.image || '',
+          quantidade: it.quantity,
+          tamanho: null,
+          cor: null,
+          sku: null,
+        });
+      }
+    });
+
+    localStorage.setItem('cart', JSON.stringify(cart));
+    window.location.href = 'cart.html';
+  };
 
   async function loadOrders() {
     try {

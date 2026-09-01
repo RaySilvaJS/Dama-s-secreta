@@ -3675,6 +3675,8 @@ async function loadOrders(page) {
     cancelled: 'badge-red'
   };
   const STATUS_LABEL = { pending: '⏳ Pendente', paid: '✅ Pago', cancelled: '✕ Cancelado' };
+  const FULFILL_BADGE = { shipped: 'badge-blue', delivered: 'badge-green' };
+  const FULFILL_LABEL = { shipped: '📦 Enviado', delivered: '✅ Entregue' };
 
   document.getElementById('orders-tbody').innerHTML = data.items.length
     ? data.items.map(o => `<tr>
@@ -3683,7 +3685,10 @@ async function loadOrders(page) {
         <td style="white-space:nowrap">${o.amount ? 'R$ ' + Number(o.amount).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—'}</td>
         <td>${esc(o.clientName || o.clientEmail || '—')}</td>
         <td>${o.clientPhone ? `<a href="https://wa.me/${(o.clientPhone||'').replace(/\D/g,'')}?text=Oi+atendimento" target="_blank" style="color:var(--green);text-decoration:none">📱 ${esc(o.clientPhone)}</a>` : '—'}</td>
-        <td><span class="badge ${STATUS_BADGE[o.status]||'badge-blue'}">${STATUS_LABEL[o.status]||esc(o.status||'?')}</span></td>
+        <td>
+          <span class="badge ${STATUS_BADGE[o.status]||'badge-blue'}">${STATUS_LABEL[o.status]||esc(o.status||'?')}</span>
+          ${o.fulfillmentStatus && o.fulfillmentStatus !== 'pending' ? `<br/><span class="badge ${FULFILL_BADGE[o.fulfillmentStatus]||'badge-blue'}" style="margin-top:3px">${FULFILL_LABEL[o.fulfillmentStatus]||esc(o.fulfillmentStatus)}</span>` : ''}
+        </td>
         <td style="white-space:nowrap;color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleString('pt-BR') : '—'}</td>
         <td>
           <div style="display:flex;gap:4px">
@@ -3727,6 +3732,22 @@ async function setOrderStatus(id, status) {
   } else alert(r?.error || 'Erro ao atualizar pedido.');
 }
 
+async function setOrderFulfillment(id, fulfillmentStatus) {
+  let trackingCode;
+  if (fulfillmentStatus === 'shipped') {
+    trackingCode = prompt('Código de rastreio (opcional — deixe em branco se não tiver):', '');
+    if (trackingCode === null) return; // cancelou o prompt
+  } else {
+    if (!confirm('Confirma marcar este pedido como ENTREGUE?')) return;
+  }
+  const r = await api.call('PATCH', `/api/admin/orders/${id}/fulfillment`, { fulfillmentStatus, trackingCode: trackingCode || undefined });
+  if (r?.ok) {
+    loadOrders();
+    const drawer = document.getElementById('order-drawer');
+    if (drawer.style.transform !== 'translateX(100%)') openOrderDrawer(id);
+  } else alert(r?.error || 'Erro ao atualizar envio.');
+}
+
 async function openOrderDrawer(id) {
   document.getElementById('order-drawer').style.transform = 'translateX(0)';
   document.getElementById('order-drawer-overlay').style.display = 'block';
@@ -3738,11 +3759,17 @@ async function openOrderDrawer(id) {
 
   const STATUS_BADGE = { pending: 'badge-yellow', paid: 'badge-green', cancelled: 'badge-red' };
   const STATUS_LABEL = { pending: '⏳ Pendente', paid: '✅ Pago', cancelled: '✕ Cancelado' };
+  const FULFILL_BADGE = { pending: 'badge-yellow', shipped: 'badge-blue', delivered: 'badge-green' };
+  const FULFILL_LABEL = { pending: '⏳ Aguardando envio', shipped: '📦 Enviado', delivered: '✅ Entregue' };
   const fmtAmt = (v) => v ? 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—';
+  const isMp = o.source === 'mercadopago';
+  const fulfillStatus = o.fulfillmentStatus || 'pending';
 
   document.getElementById('order-drawer-content').innerHTML = `
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">
       <span class="badge ${STATUS_BADGE[o.status]||'badge-blue'}" style="font-size:13px;padding:6px 16px">${STATUS_LABEL[o.status]||o.status}</span>
+      <span class="badge ${FULFILL_BADGE[fulfillStatus]}" style="font-size:13px;padding:6px 16px">${FULFILL_LABEL[fulfillStatus]}</span>
+      ${isMp ? `<span class="badge badge-blue" style="font-size:13px;padding:6px 16px">💳 Mercado Pago</span>` : ''}
     </div>
     <div class="wa-info-grid" style="margin-bottom:20px;font-size:13px">
       <span class="key">ID</span><span class="val" style="font-family:monospace;font-size:11px;word-break:break-all">${esc(o.id)}</span>
@@ -3753,14 +3780,20 @@ async function openOrderDrawer(id) {
       <span class="key">WhatsApp</span><span class="val">${o.clientPhone ? `<a href="https://wa.me/${(o.clientPhone).replace(/\D/g,'')}?text=Oi+atendimento" target="_blank" style="color:var(--green)">${esc(o.clientPhone)}</a>` : '—'}</span>
       <span class="key">CEP</span><span class="val">${esc(o.cep||'—')}</span>
       <span class="key">Criado em</span><span class="val">${o.createdAt ? new Date(o.createdAt).toLocaleString('pt-BR') : '—'}</span>
-      <span class="key">PIX Copia-Cola</span><span class="val" style="font-family:monospace;font-size:10px;word-break:break-all;color:var(--muted)">${esc(o.qrCode ? o.qrCode.slice(0,60)+'…' : '—')}</span>
+      ${!isMp ? `<span class="key">PIX Copia-Cola</span><span class="val" style="font-family:monospace;font-size:10px;word-break:break-all;color:var(--muted)">${esc(o.qrCode ? o.qrCode.slice(0,60)+'…' : '—')}</span>` : ''}
+      ${o.trackingCode ? `<span class="key">Rastreio</span><span class="val" style="font-family:monospace">${esc(o.trackingCode)}</span>` : ''}
+      ${o.shippedAt ? `<span class="key">Enviado em</span><span class="val">${new Date(o.shippedAt).toLocaleString('pt-BR')}</span>` : ''}
+      ${o.deliveredAt ? `<span class="key">Entregue em</span><span class="val">${new Date(o.deliveredAt).toLocaleString('pt-BR')}</span>` : ''}
     </div>
     <div style="margin-bottom:20px">
       <div class="btn-group">
-        ${o.status === 'pending' ? `<button class="btn btn-green" onclick="setOrderStatus('${esc(o.id)}','paid')">✅ Marcar como Pago</button>` : ''}
-        ${o.status !== 'cancelled' ? `<button class="btn btn-red" onclick="setOrderStatus('${esc(o.id)}','cancelled')">✕ Cancelar Pedido</button>` : ''}
+        ${!isMp && o.status === 'pending' ? `<button class="btn btn-green" onclick="setOrderStatus('${esc(o.id)}','paid')">✅ Marcar como Pago</button>` : ''}
+        ${!isMp && o.status !== 'cancelled' ? `<button class="btn btn-red" onclick="setOrderStatus('${esc(o.id)}','cancelled')">✕ Cancelar Pedido</button>` : ''}
+        ${o.status === 'paid' && fulfillStatus === 'pending' ? `<button class="btn btn-blue" onclick="setOrderFulfillment('${esc(o.id)}','shipped')">📦 Marcar como Enviado</button>` : ''}
+        ${fulfillStatus === 'shipped' ? `<button class="btn btn-green" onclick="setOrderFulfillment('${esc(o.id)}','delivered')">✅ Marcar como Entregue</button>` : ''}
         ${o.clientPhone ? `<a href="https://wa.me/${(o.clientPhone).replace(/\D/g,'')}?text=Oi+atendimento" target="_blank" class="btn btn-ghost">💬 Abrir WhatsApp</a>` : ''}
       </div>
+      ${isMp ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">Status de pagamento controlado automaticamente pelo Mercado Pago.</p>` : ''}
     </div>
     ${o.logs?.length ? `
     <div>

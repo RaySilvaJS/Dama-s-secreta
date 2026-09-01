@@ -1674,13 +1674,93 @@ app.put('/api/auth/password', (req, res) => {
   res.json({ success: true });
 });
 
+// Mapeia os status do Mercado Pago pro mesmo vocabulário do sistema legado —
+// mesmo mapeamento usado em server/admin.js (duplicado de propósito, ver CLAUDE.md).
+const MP_ORDER_STATUS_TO_LEGACY = {
+  approved:        'paid',
+  pending_payment: 'pending',
+  pending:         'pending',
+  in_process:      'pending',
+  rejected:        'refused',
+  cancelled:       'cancelled',
+  refunded:        'refused',
+  charged_back:    'refused',
+};
+
 app.get('/api/auth/orders', (req, res) => {
   const u = getAuthUser(req);
   if (!u) return res.status(401).json({ error: 'Não autenticado.' });
-  const paymentsFilePath = path.join(__dirname, 'data', 'payments.json');
+
   let payments = [];
-  try { payments = JSON.parse(fs.readFileSync(paymentsFilePath, 'utf-8')); } catch (e) {}
-  const orders = payments.filter(p => p.userId === u.id);
+  try { payments = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'payments.json'), 'utf-8')); } catch (e) {}
+  let mpOrders = [];
+  try { mpOrders = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'mp_orders.json'), 'utf-8')); } catch (e) {}
+  let catalog = [];
+  try { catalog = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'loja.json'), 'utf-8')); } catch (e) {}
+
+  const productImage = (productId) => {
+    const p = catalog.find(x => String(x.id) === String(productId));
+    return (p && Array.isArray(p.images) && p.images[0]) || null;
+  };
+
+  // Sistema legado (PIX manual) — um item por pedido.
+  const legacyOrders = payments
+    .filter(p => p.userId === u.id)
+    .map(p => ({
+      id:                p.id,
+      shortId:           p.shortId || null,
+      source:            'legacy',
+      status:            p.status,
+      fulfillmentStatus: p.fulfillmentStatus || 'pending',
+      trackingCode:      p.trackingCode || null,
+      shippedAt:         p.shippedAt || null,
+      deliveredAt:       p.deliveredAt || null,
+      amount:            p.amount,
+      createdAt:         p.createdAt,
+      paidAt:            p.paidAt || null,
+      refuseReason:      p.refuseReason || null,
+      address:           p.address || null,
+      items: [{
+        id:       p.productId || null,
+        name:     p.productName || p.productId || 'Produto',
+        image:    productImage(p.productId),
+        quantity: 1,
+        unitPrice: p.amount,
+        lineTotal: p.amount,
+      }],
+    }));
+
+  // Sistema Mercado Pago — pode ter vários itens por pedido.
+  const mpOrdersForUser = mpOrders
+    .filter(o => o.userId === u.id)
+    .map(o => {
+      const address = (u.enderecos || []).find(a => a.id === o.addressId) || null;
+      return {
+        id:                o.id,
+        shortId:           o.externalReference ? o.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : null,
+        source:            'mercadopago',
+        status:            MP_ORDER_STATUS_TO_LEGACY[o.status] || o.status,
+        fulfillmentStatus: o.fulfillmentStatus || 'pending',
+        trackingCode:      o.trackingCode || null,
+        shippedAt:         o.shippedAt || null,
+        deliveredAt:       o.deliveredAt || null,
+        amount:            o.amountConfirmed ?? o.amountExpected,
+        createdAt:         o.createdAt,
+        paidAt:            o.paidAt || null,
+        refuseReason:      null,
+        address,
+        items: (o.items || []).map(i => ({
+          id:        i.id,
+          name:      i.name,
+          image:     productImage(i.id),
+          quantity:  i.quantity,
+          unitPrice: i.unitPrice,
+          lineTotal: i.lineTotal,
+        })),
+      };
+    });
+
+  const orders = legacyOrders.concat(mpOrdersForUser).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   res.json({ success: true, orders });
 });
 
