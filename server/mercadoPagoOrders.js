@@ -11,6 +11,10 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const mercadopago = require('./mercadopago');
 const { validateCoupon } = require('./coupons');
+// Rastreamento + notificação — compartilhados com o webhook (ver comentário lá): a
+// aprovação pode chegar por dois caminhos (resposta síncrona aqui, ou webhook depois),
+// e os dois precisam gerar os mesmos eventos/avisos exatamente uma vez cada.
+const { markOrderApprovedTracking, notifyGroupOrderApproved } = require('./mercadoPagoWebhook');
 
 const mpOrdersPath = path.join(__dirname, 'data', 'mp_orders.json');
 const usersPath    = path.join(__dirname, 'data', 'users.json');
@@ -277,8 +281,19 @@ router.post('/', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
   order.mpStatusDetail    = mpResponse.status_detail || null;
   // Status só é confirmado (approved) aqui porque veio da API oficial do MP nesta chamada —
   // a confirmação definitiva/duradoura continua sendo feita pelo webhook.
+  const wasAlreadyPaid = !!order.paidAt;
   order.status = mpResponse.status || 'pending';
-  if (order.status === 'approved') order.amountConfirmed = mpResponse.transaction_amount;
+  if (order.status === 'approved') {
+    order.amountConfirmed = mpResponse.transaction_amount;
+    if (!order.paidAt) order.paidAt = new Date().toISOString();
+    // Gera os eventos de rastreamento e avisa o grupo aqui — muitas aprovações chegam só
+    // por essa resposta síncrona; se o webhook (assinatura verificada à parte) também
+    // processar esse pedido depois, o "wasAlreadyPaid" dele evita fazer tudo de novo.
+    if (!wasAlreadyPaid) {
+      markOrderApprovedTracking(order);
+      notifyGroupOrderApproved(order).catch(err => console.error('[MERCADO PAGO] Falha ao notificar WhatsApp:', err.message));
+    }
+  }
   order.auditLog.push({ at: new Date().toISOString(), type: 'payment_created', details: `paymentId=${mpResponse.id} status=${mpResponse.status}` });
   order.updatedAt = new Date().toISOString();
   orders[idx] = order;

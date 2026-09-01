@@ -364,8 +364,12 @@ router.post('/', async (req, res) => {
   try {
     mercadopago.verifyWebhookSignature({ xSignature, xRequestId, dataId });
   } catch (err) {
-    console.warn(`[MP-WEBHOOK] Assinatura inválida | reason=${err?.reason || 'unknown'} | request-id=${xRequestId || '?'}`);
-    appendWebhookLog({ type: 'signature_rejected', reason: err?.reason || 'unknown', requestId: xRequestId || null });
+    // Diagnóstico detalhado (nada sensível — nunca loga o secret) pra descobrir a causa
+    // real das rejeições em massa: se dataId/xRequestId chegaram vazios (bug de extração
+    // aqui) ou se a assinatura realmente não bate (secret errado) ou está "velha" (drift).
+    const driftMs = err?.timestamp ? Date.now() - Number(err.timestamp) : null;
+    console.warn(`[MP-WEBHOOK] Assinatura inválida | reason=${err?.reason || 'unknown'} | request-id=${xRequestId || '?'} | dataId=${dataId || '(vazio)'} | xSignaturePresente=${!!xSignature} | driftMs=${driftMs ?? '?'}`);
+    appendWebhookLog({ type: 'signature_rejected', reason: err?.reason || 'unknown', requestId: xRequestId || null, dataId: dataId || null, driftMs });
     return res.status(401).json({ error: 'Assinatura inválida.' });
   }
 
@@ -389,3 +393,8 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+// Reaproveitados por mercadoPagoOrders.js: a aprovação de pagamento também pode ser
+// confirmada de forma síncrona (resposta direta da API, sem esperar o webhook) — ambos
+// os caminhos precisam gerar os mesmos eventos de rastreamento e a mesma notificação.
+module.exports.markOrderApprovedTracking = markOrderApprovedTracking;
+module.exports.notifyGroupOrderApproved = notifyGroupOrderApproved;
