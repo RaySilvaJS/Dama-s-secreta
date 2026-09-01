@@ -70,6 +70,8 @@
     injectAuthNav: function () {
       var existing = document.getElementById('auth-nav-btn');
       if (existing) existing.remove();
+      var existingCompras = document.getElementById('minhas-compras-btn');
+      if (existingCompras) existingCompras.remove();
 
       var session = this.getSession();
       var btn = document.createElement('button');
@@ -115,19 +117,39 @@
           if (cb && cb.parentNode === topDiv) ref = cb;
         }
         if (ref) { topDiv.insertBefore(btn, ref); } else { topDiv.appendChild(btn); }
-        return;
+      } else {
+        // other pages — .actions, .page-actions, .hdr-actions
+        var actionsDiv = document.querySelector('header .actions, header .page-actions, header .hdr-actions');
+        if (actionsDiv) {
+          actionsDiv.insertBefore(btn, actionsDiv.firstChild);
+        } else {
+          // Fallback: append to header
+          var hdr = document.querySelector('header');
+          if (hdr) hdr.appendChild(btn);
+        }
       }
 
-      // other pages — .actions, .page-actions, .hdr-actions
-      var actionsDiv = document.querySelector('header .actions, header .page-actions, header .hdr-actions');
-      if (actionsDiv) {
-        actionsDiv.insertBefore(btn, actionsDiv.firstChild);
-        return;
+      // "Minhas compras" — mesmo estilo e ponto de inserção do botão de conta (sempre visível;
+      // clique sem estar logado redireciona pro login via Auth.requireLogin, igual o resto do site).
+      if (!document.getElementById('minhas-compras-style')) {
+        var style = document.createElement('style');
+        style.id = 'minhas-compras-style';
+        style.textContent = '#minhas-compras-btn:active{transform:scale(.96);background:rgba(255,255,255,.35)}' +
+          '#minhas-compras-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}';
+        document.head.appendChild(style);
       }
 
-      // Fallback: append to header
-      var hdr = document.querySelector('header');
-      if (hdr) hdr.appendChild(btn);
+      var comprasBtn = document.createElement('button');
+      comprasBtn.id = 'minhas-compras-btn';
+      comprasBtn.type = 'button';
+      comprasBtn.style.cssText = btn.style.cssText;
+      comprasBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Minhas compras';
+      comprasBtn.onmouseover = btn.onmouseover;
+      comprasBtn.onmouseout  = btn.onmouseout;
+      comprasBtn.onclick = function () {
+        if (window.Auth.requireLogin(true)) window.location.href = 'meus-pedidos.html';
+      };
+      if (btn.parentNode) btn.parentNode.insertBefore(comprasBtn, btn);
     }
   };
 
