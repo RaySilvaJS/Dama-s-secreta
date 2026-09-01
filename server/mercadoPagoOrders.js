@@ -14,7 +14,7 @@ const { validateCoupon } = require('./coupons');
 // Rastreamento + notificação — compartilhados com o webhook (ver comentário lá): a
 // aprovação pode chegar por dois caminhos (resposta síncrona aqui, ou webhook depois),
 // e os dois precisam gerar os mesmos eventos/avisos exatamente uma vez cada.
-const { markOrderApprovedTracking, notifyGroupOrderApproved } = require('./mercadoPagoWebhook');
+const { markOrderApprovedTracking, notifyGroupOrderApproved, notifyClientOrderApproved } = require('./mercadoPagoWebhook');
 
 const mpOrdersPath = path.join(__dirname, 'data', 'mp_orders.json');
 const usersPath    = path.join(__dirname, 'data', 'users.json');
@@ -291,7 +291,8 @@ router.post('/', rateLimit(15, 5 * 60 * 1000), async (req, res) => {
     // processar esse pedido depois, o "wasAlreadyPaid" dele evita fazer tudo de novo.
     if (!wasAlreadyPaid) {
       markOrderApprovedTracking(order);
-      notifyGroupOrderApproved(order).catch(err => console.error('[MERCADO PAGO] Falha ao notificar WhatsApp:', err.message));
+      notifyGroupOrderApproved(order).catch(err => console.error('[MERCADO PAGO] Falha ao notificar WhatsApp (grupo):', err.message));
+      notifyClientOrderApproved(order).catch(err => console.error('[MERCADO PAGO] Falha ao notificar WhatsApp (cliente):', err.message));
     }
   }
   order.auditLog.push({ at: new Date().toISOString(), type: 'payment_created', details: `paymentId=${mpResponse.id} status=${mpResponse.status}` });

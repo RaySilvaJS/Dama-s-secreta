@@ -10,7 +10,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const mercadopago = require('./mercadopago');
-const { getSocket, getGroupId } = require('./whatsapp');
+const { getSocket, getGroupId, sendToClient } = require('./whatsapp');
 
 const mpOrdersPath = path.join(__dirname, 'data', 'mp_orders.json');
 const webhookLogPath = path.join(__dirname, 'data', 'mp_webhook_log.json');
@@ -144,6 +144,41 @@ async function notifyGroupOrderApproved(order) {
   }
 }
 
+// Notifica o próprio cliente (WhatsApp cadastrado na conta dele) que o pagamento foi
+// aprovado — o fluxo legado (payment.js, PIX manual) já avisa o cliente nesse momento;
+// esse aqui nunca avisava, o cliente só recebia mensagem bem depois, quando o pedido
+// fosse marcado como enviado.
+async function notifyClientOrderApproved(order) {
+  const users = loadUsers();
+  const user = users.find(u => u.id === order.userId) || {};
+  if (!user.whatsapp) {
+    console.error(`[MP-WEBHOOK] Pedido ${order.externalReference} aprovado sem WhatsApp cadastrado no cliente — sem notificação.`);
+    return;
+  }
+
+  const itemsLines = (order.items || []).map(i => `📦 ${i.quantity}x ${i.name}`).join('\n');
+  const shortDisplay = order.externalReference ? order.externalReference.replace('MPORD-', '').slice(0, 8).toUpperCase() : order.id.slice(0, 8);
+
+  const lines = [
+    '✅ *Pagamento Aprovado!*',
+    '',
+    `Olá${user.nome ? ', ' + user.nome : ''}!`,
+    `Seu pedido #${shortDisplay} foi *confirmado com sucesso*.`,
+    '',
+    itemsLines || null,
+    `💰 Valor: ${formatBRL(order.amountConfirmed ?? order.amountExpected)}`,
+    '',
+    'Seu pedido está sendo preparado para envio. Obrigado pela compra! 🎉',
+  ].filter(l => l !== null).join('\n');
+
+  try {
+    await sendToClient(user.whatsapp, lines);
+    console.log(`[MP-WEBHOOK] Pedido ${order.externalReference} aprovado — cliente notificado.`);
+  } catch (err) {
+    console.error('[MP-WEBHOOK] Erro ao notificar cliente:', err.message);
+  }
+}
+
 // Log de auditoria das notificações recebidas — apenas metadados, nunca dados sensíveis.
 const loadWebhookLog = () => { try { return JSON.parse(fs.readFileSync(webhookLogPath, 'utf-8')); } catch { return []; } };
 const saveWebhookLog = (l) => fs.writeFileSync(webhookLogPath, JSON.stringify(l.slice(-500), null, 2), 'utf-8');
@@ -257,7 +292,8 @@ async function handlePaymentNotification(dataId, xRequestId, res) {
   appendWebhookLog({ type: 'processed', topic: 'payment', paymentId: String(mpPayment.id), orderId: order.id, status: mpPayment.status });
 
   if (mpPayment.status === 'approved' && !wasAlreadyPaid) {
-    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp:', err.message));
+    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp (grupo):', err.message));
+    notifyClientOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp (cliente):', err.message));
   }
 
   return res.status(200).json({ received: true, processed: true });
@@ -344,7 +380,8 @@ async function handleOrderNotification(dataId, xRequestId, res) {
   appendWebhookLog({ type: 'processed', topic: 'order', mpOrderId: String(mpOrder.id), orderId: order.id, status: mappedStatus });
 
   if (mappedStatus === 'approved' && !wasAlreadyPaid) {
-    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp:', err.message));
+    notifyGroupOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp (grupo):', err.message));
+    notifyClientOrderApproved(order).catch(err => console.error('[MP-WEBHOOK] Falha ao notificar WhatsApp (cliente):', err.message));
   }
 
   return res.status(200).json({ received: true, processed: true });
@@ -398,3 +435,4 @@ module.exports = router;
 // os caminhos precisam gerar os mesmos eventos de rastreamento e a mesma notificação.
 module.exports.markOrderApprovedTracking = markOrderApprovedTracking;
 module.exports.notifyGroupOrderApproved = notifyGroupOrderApproved;
+module.exports.notifyClientOrderApproved = notifyClientOrderApproved;
