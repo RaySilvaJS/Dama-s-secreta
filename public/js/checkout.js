@@ -631,32 +631,80 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Payment method selection ────────────────────────────────────────────────
   // Mercado Pago é o único método disponível — a função existe (e continua sendo
   // chamada pelo onclick do card) para reaproveitar a ativação/desativação do Brick.
+  // "mpOpened" controla se o cliente já abriu essa seção (e portanto o Brick já foi
+  // montado) — sem isso o botão fixo "Finalizar Compra" ficava sempre habilitado e
+  // sem função assim que endereço+frete estavam prontos, mesmo sem forma de pagamento
+  // escolhida, porque o card já vinha marcado como "selected" no HTML por padrão.
+  let mpOpened = false;
+
   window.selectPayMethod = async function() {
-    if (!orderItems.length || !selectedAddressId || !shippingData) {
-      alert('Selecione o endereço de entrega e aguarde o cálculo do frete antes de continuar.');
-      return;
+    try {
+      if (!orderItems.length || !selectedAddressId || !shippingData) {
+        alert('Selecione o endereço de entrega e aguarde o cálculo do frete antes de continuar.');
+        return;
+      }
+      const authed = await ensureAuth();
+      if (!authed || !authSession?.token) return;
+
+      payMethod = 'mercadopago';
+      const mpOpt = $('co-mp-opt');
+      if (mpOpt) {
+        mpOpt.classList.add('selected');
+        const input = mpOpt.querySelector('input');
+        if (input) input.checked = true;
+      }
+
+      const mpWrap = $('co-mp-brick-wrap');
+      if (mpWrap) mpWrap.style.display = 'block';
+      if (payBtn) payBtn.style.display = 'none';
+      const btnHint = $('co-btn-hint');
+      if (btnHint) btnHint.style.display = 'none';
+
+      if (!window.MPCheckout) throw new Error('Módulo de pagamento não carregado.');
+      window.MPCheckout.activate(getMpContext());
+      mpOpened = true;
+
+      updateTotal();
+    } catch (err) {
+      console.error('[Checkout] Erro ao abrir forma de pagamento:', err);
+      const btnHint = $('co-btn-hint');
+      if (btnHint) {
+        btnHint.textContent = 'Não foi possível abrir o pagamento agora. Recarregue a página e tente novamente.';
+        btnHint.style.display = 'block';
+      }
     }
-    const authed = await ensureAuth();
-    if (!authed || !authSession?.token) return;
-
-    payMethod = 'mercadopago';
-    const mpOpt = $('co-mp-opt');
-    if (mpOpt) {
-      mpOpt.classList.add('selected');
-      const input = mpOpt.querySelector('input');
-      if (input) input.checked = true;
-    }
-
-    const mpWrap = $('co-mp-brick-wrap');
-    if (mpWrap) mpWrap.style.display = 'block';
-    if (payBtn) payBtn.style.display = 'none';
-    const btnHint = $('co-btn-hint');
-    if (btnHint) btnHint.style.display = 'none';
-
-    if (window.MPCheckout) window.MPCheckout.activate(getMpContext());
-
-    updateTotal();
   };
+
+  // Botão fixo "Finalizar Compra com Segurança": some assim que o Brick é aberto
+  // (selectPayMethod esconde ele). Enquanto visível, sua única função é garantir que
+  // o cliente não fique sem feedback nenhum se clicar antes de escolher a forma de
+  // pagamento — abre a seção e mostra uma mensagem clara, em vez de não fazer nada.
+  if (payBtn) {
+    payBtn.addEventListener('click', async (e) => {
+      try {
+        if (payBtn.disabled) return;
+        if (mpOpened) return; // Brick já assumiu o fluxo — este botão nem deveria estar visível
+        e.preventDefault();
+
+        const btnHint = $('co-btn-hint');
+        if (btnHint) {
+          btnHint.textContent = 'Selecione uma forma de pagamento para continuar.';
+          btnHint.style.display = 'block';
+        }
+        await window.selectPayMethod();
+        const mpOpt = $('co-mp-opt');
+        if (mpOpt) {
+          mpOpt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          mpOpt.style.animation = 'none';
+          void mpOpt.offsetWidth; // reinicia a animação se o cliente clicar de novo
+          mpOpt.style.animation = 'coPayHighlight 1s ease';
+        }
+      } catch (err) {
+        console.error('[Checkout] Erro ao finalizar compra:', err);
+        alert('Ocorreu um erro ao processar seu pedido. Tente novamente ou entre em contato pelo WhatsApp.');
+      }
+    });
+  }
 
   // ── Coupon ────────────────────────────────────────────────────────────────────
   let appliedCouponCode = null;
