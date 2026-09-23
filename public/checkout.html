@@ -570,78 +570,7 @@
     </div>
   </div>
 
-  <!-- 4. MEIO DE PAGAMENTO -->
-  <div class="co-card" id="co-pay-card">
-    <div class="co-card-hdr">
-      <span class="co-step-badge">3</span>
-      Forma de pagamento
-    </div>
-    <div class="co-card-body">
-
-      <!-- Mercado Pago — único método de pagamento (Cartão / Pix / Boleto via Payment Brick).
-           Abre automaticamente assim que endereço + frete estão prontos (ver renderFreteOpt
-           em checkout.js); o clique aqui continua funcionando como atalho/fallback. -->
-      <div class="co-pay-opt" id="co-mp-opt" onclick="selectPayMethod('mercadopago')">
-        <input type="radio" name="paymethod" value="mercadopago"/>
-        <div class="co-pay-logo" style="background:#009EE3;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.3px">MP</div>
-        <div>
-          <div class="co-pay-label">Cartão, Pix ou Boleto</div>
-          <div class="co-pay-sub">Pagamento processado com segurança pelo Mercado Pago</div>
-        </div>
-        <svg class="co-pay-chevron" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
-      </div>
-
-      <div id="co-mp-brick-wrap" style="display:none;margin-top:8px;">
-        <div id="co-mp-loading" style="display:flex;align-items:center;gap:10px;padding:16px 0;color:#6B3A56;font-size:13px;">
-          <span class="co-spinner dark"></span> Carregando formas de pagamento...
-        </div>
-        <div id="co-mp-error" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;color:#B91C1C;font-size:13px;margin-bottom:10px;"></div>
-        <div id="co-mp-brick-container"></div>
-        <button id="co-mp-retry-btn" type="button" style="display:none;margin-top:10px;width:100%;padding:12px;background:#FFF0F6;color:#C93D72;border:1.5px solid #F0D4E5;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
-          Tentar novamente
-        </button>
-      </div>
-
-      <!-- Revisão e confirmação — mostrada antes de efetivar a cobrança no Mercado Pago -->
-      <div id="co-mp-review-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:16px;">
-        <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
-          <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#1A0A12;">Revise seu pedido</h3>
-          <p style="margin:0 0 16px;font-size:12px;color:#6B7280;">Confira os dados antes de confirmar o pagamento.</p>
-          <div id="co-mp-review-items" style="display:grid;gap:6px;margin-bottom:14px;"></div>
-          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:10px;">
-            <div style="font-size:11px;font-weight:700;color:#6B3A56;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Endereço de entrega</div>
-            <div id="co-mp-review-address" style="font-size:12px;color:#374151;line-height:1.5;"></div>
-          </div>
-          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:6px;">
-              <span>Forma de pagamento</span><strong id="co-mp-review-method"></strong>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1A0A12;">
-              <span>Total</span><span id="co-mp-review-total"></span>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:16px;">
-            <button id="co-mp-review-cancel" type="button" style="flex:1;padding:13px;border:1.5px solid #F0D4E5;background:#fff;color:#6B3A56;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Voltar</button>
-            <button id="co-mp-review-confirm" type="button" style="flex:1;padding:13px;border:none;background:#16A34A;color:#fff;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Confirmar pagamento</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- 5. FATURAMENTO -->
-  <div class="co-card" id="co-billing-card">
-    <div class="co-card-hdr">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      Seus dados
-    </div>
-    <div class="co-card-body" id="co-billing-body">
-      <div class="co-info-placeholder"><span class="co-spinner dark"></span></div>
-    </div>
-  </div>
-
-  <!-- 6. RESUMO -->
+  <!-- 6. RESUMO (valor total — fica entre Entrega e Pagamento pra não precisar rolar até embaixo) -->
   <div class="co-card">
     <div class="co-card-hdr">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -699,6 +628,68 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Dados protegidos LGPD
       </div>
+    </div>
+  </div>
+
+  <!-- 4. MEIO DE PAGAMENTO -->
+  <div class="co-card" id="co-pay-card">
+    <div class="co-card-hdr">
+      <span class="co-step-badge">3</span>
+      Forma de pagamento
+    </div>
+    <div class="co-card-body">
+
+      <!-- Mercado Pago — único método de pagamento (Cartão / Pix / Boleto via Payment Brick).
+           Abre automaticamente assim que endereço + frete estão prontos (ver renderFreteOpt
+           em checkout.js). Sem opção intermediária pra clicar — os meios de pagamento
+           aparecem direto aqui. -->
+      <div id="co-mp-brick-wrap" style="display:none;">
+        <div id="co-mp-loading" style="display:flex;align-items:center;gap:10px;padding:16px 0;color:#6B3A56;font-size:13px;">
+          <span class="co-spinner dark"></span> Carregando formas de pagamento...
+        </div>
+        <div id="co-mp-error" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;color:#B91C1C;font-size:13px;margin-bottom:10px;"></div>
+        <div id="co-mp-brick-container"></div>
+        <button id="co-mp-retry-btn" type="button" style="display:none;margin-top:10px;width:100%;padding:12px;background:#FFF0F6;color:#C93D72;border:1.5px solid #F0D4E5;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+          Tentar novamente
+        </button>
+      </div>
+
+      <!-- Revisão e confirmação — mostrada antes de efetivar a cobrança no Mercado Pago -->
+      <div id="co-mp-review-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+          <h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#1A0A12;">Revise seu pedido</h3>
+          <p style="margin:0 0 16px;font-size:12px;color:#6B7280;">Confira os dados antes de confirmar o pagamento.</p>
+          <div id="co-mp-review-items" style="display:grid;gap:6px;margin-bottom:14px;"></div>
+          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:#6B3A56;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;">Endereço de entrega</div>
+            <div id="co-mp-review-address" style="font-size:12px;color:#374151;line-height:1.5;"></div>
+          </div>
+          <div style="border-top:1px solid #F0D4E5;padding-top:10px;margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:6px;">
+              <span>Forma de pagamento</span><strong id="co-mp-review-method"></strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1A0A12;">
+              <span>Total</span><span id="co-mp-review-total"></span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button id="co-mp-review-cancel" type="button" style="flex:1;padding:13px;border:1.5px solid #F0D4E5;background:#fff;color:#6B3A56;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Voltar</button>
+            <button id="co-mp-review-confirm" type="button" style="flex:1;padding:13px;border:none;background:#16A34A;color:#fff;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">Confirmar pagamento</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 5. FATURAMENTO -->
+  <div class="co-card" id="co-billing-card">
+    <div class="co-card-hdr">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Seus dados
+    </div>
+    <div class="co-card-body" id="co-billing-body">
+      <div class="co-info-placeholder"><span class="co-spinner dark"></span></div>
     </div>
   </div>
 
