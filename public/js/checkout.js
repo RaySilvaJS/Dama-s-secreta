@@ -688,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
       payMethod = 'mercadopago';
       const mpOpt = $('co-mp-opt');
       if (mpOpt) {
-        mpOpt.classList.add('selected');
+        mpOpt.classList.add('selected', 'compact');
         const input = mpOpt.querySelector('input');
         if (input) input.checked = true;
       }
