@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── State ─────────────────────────────────────────────────────────────────────
   let selectedAddressId = null;
+  let editingAddressId  = null;
   let addresses         = [];
   let shippingData      = null;
   let payMethod         = 'mercadopago'; // único método de pagamento disponível no checkout
@@ -93,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Render addresses ──────────────────────────────────────────────────────────
-  function renderAddresses() {
+  function renderAddresses(preferredId) {
     if (!addresses.length) {
       // No addresses: show inline form immediately
       addrList.innerHTML = '';
@@ -109,10 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
     addrList.innerHTML = addresses.map(a => `
       <label class="co-addr-opt${a.principal ? ' selected' : ''}" data-id="${esc(a.id)}">
         <input type="radio" name="co-addr" value="${esc(a.id)}" ${a.principal ? 'checked' : ''}/>
-        <div>
+        <div style="flex:1;min-width:0">
           <span class="co-addr-name">${esc(a.nome)}</span>${a.principal ? '<span class="co-addr-badge">PRINCIPAL</span>' : ''}
           <div class="co-addr-line">${addrLine(a)}</div>
         </div>
+        <button type="button" class="co-addr-edit-btn" onclick="event.stopPropagation(); window.editAddress('${esc(a.id)}')">Editar</button>
       </label>`).join('');
 
     addrList.querySelectorAll('.co-addr-opt').forEach(el => {
@@ -122,8 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const showBtn = $('co-show-new-addr-btn');
     if (showBtn) showBtn.style.display = 'inline-flex';
 
-    const principal = addresses.find(a => a.principal) || addresses[0];
-    selectAddress(principal.id);
+    const toSelect = addresses.find(a => a.id === preferredId) || addresses.find(a => a.principal) || addresses[0];
+    selectAddress(toSelect.id);
   }
 
   function selectAddress(id) {
@@ -155,18 +157,70 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Toggle new address form ───────────────────────────────────────────────────
+  const ADD_ADDR_BTN_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Adicionar outro endereço';
+  const SAVE_ADDR_BTN_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Usar este endereço e calcular frete';
+  const EDIT_ADDR_BTN_HTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Salvar alterações';
+
+  // Limpa o formulário e volta ao modo "novo endereço" (usado ao abrir o form do
+  // zero ou ao cancelar uma edição em andamento).
+  function resetAddrForm() {
+    editingAddressId = null;
+    const cepEl = $('addr-cep');       if (cepEl)  cepEl.value = '';
+    const numEl = $('addr-numero');    if (numEl)  numEl.value = '';
+    const compEl = $('addr-complemento'); if (compEl) compEl.value = '';
+    clearAddrAutoFields();
+    const badge = $('co-addr-saved-badge');
+    if (badge) badge.classList.remove('visible');
+    const errEl = $('co-addr-err');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    const btn = $('co-save-addr-btn');
+    if (btn) { btn.disabled = false; btn.style.display = ''; btn.innerHTML = SAVE_ADDR_BTN_HTML; }
+  }
+
   window.toggleNewAddrForm = function() {
     const form = $('co-new-addr-form');
     if (!form) return;
     const isOpen = form.classList.contains('open');
-    form.classList.toggle('open', !isOpen);
+    if (isOpen) {
+      form.classList.remove('open');
+      editingAddressId = null;
+    } else {
+      resetAddrForm();
+      form.classList.add('open');
+    }
     const showBtn = $('co-show-new-addr-btn');
     if (!showBtn) return;
-    if (isOpen) {
-      showBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Adicionar outro endereço';
-    } else {
-      showBtn.innerHTML = '✕ Cancelar';
-    }
+    showBtn.innerHTML = isOpen ? ADD_ADDR_BTN_HTML : '✕ Cancelar';
+  };
+
+  // ── Edit an existing address ──────────────────────────────────────────────────
+  window.editAddress = function(id) {
+    const addr = addresses.find(a => a.id === id);
+    if (!addr) return;
+
+    resetAddrForm();
+    editingAddressId = id;
+
+    const cepEl = $('addr-cep');
+    if (cepEl) cepEl.value = (addr.cep || '').replace(/(\d{5})(\d{3})/, '$1-$2');
+    const numEl = $('addr-numero');
+    if (numEl) numEl.value = addr.numero || '';
+    const compEl = $('addr-complemento');
+    if (compEl) compEl.value = addr.complemento || '';
+    setAddrField('addr-rua',    addr.rua);
+    setAddrField('addr-bairro', addr.bairro);
+    setAddrField('addr-cidade', addr.cidade);
+    setAddrField('addr-estado', addr.estado);
+
+    const btn = $('co-save-addr-btn');
+    if (btn) btn.innerHTML = EDIT_ADDR_BTN_HTML;
+
+    const form = $('co-new-addr-form');
+    if (form) form.classList.add('open');
+    const showBtn = $('co-show-new-addr-btn');
+    if (showBtn) { showBtn.style.display = 'inline-flex'; showBtn.innerHTML = '✕ Cancelar'; }
+
+    if (form) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   // ── Auto-fill address by CEP (viacep.com.br) ─────────────────────────────────
@@ -326,13 +380,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ── Save new address ──────────────────────────────────────────────────────────
+  // ── Save new address (ou salva edição de um endereço existente) ────────────────
   window.saveNewAddress = async function() {
     const btn    = $('co-save-addr-btn');
     const errEl  = $('co-addr-err');
     const badge  = $('co-addr-saved-badge');
+    const editId = editingAddressId;
+    const editAddr = editId ? addresses.find(a => a.id === editId) : null;
 
-    const nome        = ($('addr-nome')?.value        || '').trim() || 'Casa';
+    // O form não tem campo de nome — ao editar preserva o nome já salvo ("Casa", "Trabalho"...)
+    const nome        = editAddr ? editAddr.nome : (($('addr-nome')?.value || '').trim() || 'Casa');
     const cepRaw      = ($('addr-cep')?.value         || '').replace(/\D/g, '');
     const numero      = ($('addr-numero')?.value      || '').trim();
     const rua         = ($('addr-rua')?.value         || '').trim();
@@ -366,13 +423,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!authed || !authSession?.token) { showAddrErr('Por favor, preencha seus dados pessoais.'); return; }
       }
 
-      const res = await fetch('/api/auth/addresses', {
-        method: 'POST',
+      const res = await fetch(editId ? `/api/auth/addresses/${editId}` : '/api/auth/addresses', {
+        method: editId ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': authSession ? authSession.token : ''
         },
-        body: JSON.stringify({ nome, cep: cepRaw, rua, numero, complemento, bairro, cidade, estado, principal: addresses.length === 0 })
+        body: JSON.stringify(editId
+          ? { nome, cep: cepRaw, rua, numero, complemento, bairro, cidade, estado }
+          : { nome, cep: cepRaw, rua, numero, complemento, bairro, cidade, estado, principal: addresses.length === 0 })
       });
       const data = await res.json();
 
@@ -381,39 +440,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       addresses = data.addresses || addresses;
+      editingAddressId = null;
 
       // Show saved badge
       if (badge) badge.classList.add('visible');
       btn.style.display = 'none';
 
-      // Select the new address
-      const newAddr = data.address;
-      selectedAddressId = newAddr.id;
+      // Re-render a lista com o endereço novo/editado selecionado (hide form, show saved address)
+      renderAddresses(data.address.id);
 
-      // Re-render address list (hide form, show saved address)
-      addrList.innerHTML = `
-        <label class="co-addr-opt selected">
-          <input type="radio" name="co-addr" value="${esc(newAddr.id)}" checked/>
-          <div>
-            <span class="co-addr-name">${esc(newAddr.nome)}</span><span class="co-addr-badge">PRINCIPAL</span>
-            <div class="co-addr-line">${addrLine(newAddr)}</div>
-          </div>
-        </label>`;
-
-      // Collapse new addr form
       const form = $('co-new-addr-form');
       if (form) form.classList.remove('open');
 
       const showBtn = $('co-show-new-addr-btn');
-      if (showBtn) { showBtn.style.display = 'inline-flex'; showBtn.textContent = '+ Adicionar outro endereço'; }
+      if (showBtn) { showBtn.style.display = 'inline-flex'; showBtn.innerHTML = ADD_ADDR_BTN_HTML; }
 
       // Auto-calc frete
       calcFreteFromCep(cepRaw);
 
     } catch {
       showAddrErr('Erro de conexão. Tente novamente.');
-      btn.disabled = false;
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Usar este endereço e calcular frete';
     }
   };
 
@@ -423,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Usar este endereço e calcular frete';
+      btn.innerHTML = editingAddressId ? EDIT_ADDR_BTN_HTML : SAVE_ADDR_BTN_HTML;
     }
   }
 
