@@ -206,6 +206,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let cepDebounceTimer = null;
   let cepReqSeq = 0;
 
+  // Auto-salva o endereço assim que todos os campos obrigatórios estiverem
+  // preenchidos, sem precisar clicar em "Usar este endereço e calcular frete".
+  let addrAutoSaveTimer = null;
+
+  function tryAutoSaveAddress() {
+    clearTimeout(addrAutoSaveTimer);
+    addrAutoSaveTimer = setTimeout(() => {
+      const btn = $('co-save-addr-btn');
+      if (!btn || btn.disabled || btn.style.display === 'none') return; // já salvando/salvo
+
+      const cepDigits = ($('addr-cep')?.value    || '').replace(/\D/g, '');
+      const numero    = ($('addr-numero')?.value || '').trim();
+      const rua       = ($('addr-rua')?.value    || '').trim();
+      const cidade    = ($('addr-cidade')?.value || '').trim();
+      const estado    = ($('addr-estado')?.value || '').trim();
+
+      if (cepDigits.length === 8 && numero && rua && cidade && estado) {
+        window.saveNewAddress();
+      }
+    }, 600);
+  }
+
   function setupCepAutoFill() {
     const cepInput = $('addr-cep');
     const spinner  = $('addr-cep-spinner');
@@ -280,6 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
           // CEP válido — calcula o frete automaticamente, sem precisar clicar em nada
           await calcFreteFromCep(digits);
 
+          // Caso o número já esteja preenchido (autofill do navegador), tenta
+          // salvar o endereço automaticamente assim que o CEP resolver.
+          tryAutoSaveAddress();
+
         } catch {
           if (mySeq !== cepReqSeq) return;
           clearAddrAutoFields();
@@ -290,6 +316,13 @@ document.addEventListener('DOMContentLoaded', () => {
           if (mySeq === cepReqSeq && spinner) spinner.classList.remove('active');
         }
       }, 500);
+    });
+  }
+
+  function setupAddrAutoSaveFields() {
+    ['addr-numero', 'addr-rua'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('input', tryAutoSaveAddress);
     });
   }
 
@@ -925,6 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderItems();
   renderBilling();
   setupCepAutoFill();
+  setupAddrAutoSaveFields();
   loadAddresses();
   updateTotal();
 });
