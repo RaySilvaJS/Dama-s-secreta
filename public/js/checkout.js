@@ -419,6 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('shipping', JSON.stringify({ cep: s.cep || '', frete: freteReal, prazo: s.deadline, total: summary.total_final, source }));
     localStorage.setItem('checkout-summary', JSON.stringify(summary));
     updateTotal();
+
+    // Assim que o frete é calculado (endereço + frete prontos), abre automaticamente
+    // os meios de pagamento em vez de exigir um clique no card "Cartão, Pix ou Boleto".
+    if (!mpOpened && typeof window.selectPayMethod === 'function') {
+      window.selectPayMethod();
+    }
   }
 
   async function calcFreteFromCep(cep) {

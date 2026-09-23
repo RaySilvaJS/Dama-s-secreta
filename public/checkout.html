@@ -473,12 +473,6 @@
       <div id="co-new-addr-form">
         <div class="co-addr-form">
 
-          <!-- Nome do endereço -->
-          <div class="co-field">
-            <label>Nome do endereço</label>
-            <input id="addr-nome" type="text" placeholder="Ex: Casa, Trabalho..." autocomplete="off"/>
-          </div>
-
           <!-- CEP com auto-fill -->
           <div class="co-field">
             <label>CEP</label>
@@ -565,8 +559,8 @@
     <div class="co-card-body">
 
       <!-- Mercado Pago — único método de pagamento (Cartão / Pix / Boleto via Payment Brick).
-           Começa fechada/não selecionada de propósito: o cliente precisa clicar aqui pra abrir
-           as opções de pagamento antes de poder finalizar (ver selectPayMethod em checkout.js). -->
+           Abre automaticamente assim que endereço + frete estão prontos (ver renderFreteOpt
+           em checkout.js); o clique aqui continua funcionando como atalho/fallback. -->
       <div class="co-pay-opt" id="co-mp-opt" onclick="selectPayMethod('mercadopago')">
         <input type="radio" name="paymethod" value="mercadopago"/>
         <div class="co-pay-logo" style="background:#009EE3;color:#fff;font-size:10px;font-weight:900;letter-spacing:-.3px">MP</div>
